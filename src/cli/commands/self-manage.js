@@ -653,3 +653,8 @@ ${c.bold('Commands:')}
 }
 
 module.exports = { registerSelfManageCommands };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+registerSelfManageCommands.atomicProperties = { charge: -1, valence: 1, mass: "heavy", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 1, group: 3, period: 6, harmPotential: "dangerous", alignment: "healing", intention: "benevolent", domain: "utility" };

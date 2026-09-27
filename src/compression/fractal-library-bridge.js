@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Fractal-Library Bridge — Connects the fractal compression/holographic encoding
@@ -30,6 +31,7 @@ function _loadCompression() {
     }
   }
 }
+_loadCompression.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── 1. Holographic Boost for Decision Engine ────────────────────────────
 
@@ -124,8 +126,13 @@ function familyStabilitySignal(patternId, store) {
 }
 
 function _neutralStability() {
-  return { stability: 0.5, familySize: 0, avgCoherency: 0, inFamily: false };
+  const __retVal = { stability: 0.5, familySize: 0, avgCoherency: 0, inFamily: false };
+  // field contribution removed: contributed unnamed scalar, not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
+_neutralStability.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── 3. Structured Description Embedding ─────────────────────────────────
 
@@ -248,6 +255,7 @@ function _deltaSimilarity(deltaA, deltaB) {
   }
   return matches / Math.max(keysA.length, keysB.length);
 }
+_deltaSimilarity.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── 5. Family Stability for Confidence Decay ───────────────────────────
 
@@ -526,6 +534,7 @@ function _findSingletonMatch(targetHash, newPattern, store) {
 
   return null;
 }
+_findSingletonMatch.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 3, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── 8. Fractal Integrity Check ─────────────────────────────────────
 
@@ -625,7 +634,7 @@ function repairFractalIntegrity(store) {
       templatesFixed,
     };
   } catch (e) {
-    try { store.db.exec('ROLLBACK'); } catch (_) { /* ignore */ }
+    try { store.db.exec('ROLLBACK'); } catch (_) { quiet('compression:fractal-library-bridge:repairFractalIntegrity', _); /* ignore */ }
     if (process.env.ORACLE_DEBUG) console.warn('[bridge:repairFractalIntegrity]', e?.message);
     return { orphanedDeltasRemoved: 0, orphanedEmbeddingsRemoved: 0, templatesFixed: 0 };
   }
@@ -634,6 +643,7 @@ function repairFractalIntegrity(store) {
 function _safeParseJSON(str) {
   try { return JSON.parse(str); } catch { return {}; }
 }
+_safeParseJSON.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   holoDecisionBoost,
@@ -647,3 +657,16 @@ module.exports = {
   checkFractalIntegrity,
   repairFractalIntegrity,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+holoDecisionBoost.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 10, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+familyStabilitySignal.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+structuredDescriptionVector.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 11, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+familyAwareSimilarity.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+familyDecayModifier.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+auditIntegration.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+integratePatternIncremental.atomicProperties = { charge: 1, valence: 1, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 1, group: 10, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+checkFractalIntegrity.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+repairFractalIntegrity.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 3, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };

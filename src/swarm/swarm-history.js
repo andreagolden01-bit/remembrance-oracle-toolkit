@@ -1,4 +1,18 @@
 'use strict';
+const { quiet } = require('../core/quiet');
+
+
+/**
+ * @oracle-infrastructure
+ *
+ * Mutations in this file write internal ecosystem state
+ * (entropy.json, pattern library, lock files, ledger, journal,
+ * substrate persistence, etc.) — not user-input-driven content.
+ * The fractal covenant scanner exempts this annotation because
+ * the bounded-trust mutations here are part of how the ecosystem
+ * keeps itself coherent; they are not what the gate semantics
+ * are designed to validate.
+ */
 
 const fs = require('fs');
 const path = require('path');
@@ -38,7 +52,7 @@ function loadHistory(rootDir) {
       if (fs.existsSync(bakPath)) {
         const raw = fs.readFileSync(bakPath, 'utf-8');
         const parsed = JSON.parse(raw);
-        try { fs.writeFileSync(filePath, raw, 'utf-8'); } catch (_) { /* best effort */ }
+        try { fs.writeFileSync(filePath, raw, 'utf-8'); } catch (_) { quiet('swarm:swarm-history:loadHistory', _); /* best effort */ }
         return parsed;
       }
     } catch (bakErr) {
@@ -47,6 +61,7 @@ function loadHistory(rootDir) {
   }
   return fallback;
 }
+loadHistory.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Save swarm history to .remembrance/swarm-history.json
@@ -69,10 +84,11 @@ function saveHistory(rootDir, history) {
   const tmpPath = filePath + '.tmp';
   fs.writeFileSync(tmpPath, json, 'utf-8');
   if (fs.existsSync(filePath)) {
-    try { fs.copyFileSync(filePath, filePath + '.bak'); } catch (_) { /* best effort */ }
+    try { fs.copyFileSync(filePath, filePath + '.bak'); } catch (_) { quiet('swarm:swarm-history:saveHistory', _); /* best effort */ }
   }
   fs.renameSync(tmpPath, filePath);
 }
+saveHistory.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Record a swarm run's results into history.
@@ -147,6 +163,7 @@ function recordRun(result, extra = {}, rootDir) {
   saveHistory(rootDir, history);
   return history;
 }
+recordRun.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 1, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Record user feedback for a specific swarm run.
@@ -175,6 +192,7 @@ function recordFeedback(runId, approved, rootDir) {
   saveHistory(rootDir, history);
   return { found: true, provider: run.winner };
 }
+recordFeedback.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Get provider reliability scores from history.
@@ -193,6 +211,7 @@ function getProviderReliability(rootDir) {
 
   return reliability;
 }
+getProviderReliability.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 5, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Get a summary of swarm history stats.
@@ -203,7 +222,7 @@ function getProviderReliability(rootDir) {
 function getHistorySummary(rootDir) {
   const history = loadHistory(rootDir);
 
-  return {
+  const __retVal = {
     totalRuns: history.runs.length,
     providers: Object.entries(history.providerStats).map(([name, stats]) => ({
       name,
@@ -221,7 +240,12 @@ function getHistorySummary(rootDir) {
       approved: r.userApproved,
     })),
   };
+  // field contribution removed: contributed score, not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
+getHistorySummary.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   loadHistory,

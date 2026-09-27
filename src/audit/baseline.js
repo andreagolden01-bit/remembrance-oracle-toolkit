@@ -1,4 +1,6 @@
 'use strict';
+const { quiet } = require('../core/quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 /**
  * Baseline mode for `oracle audit`.
@@ -137,6 +139,25 @@ function readBaseline(baselinePath) {
  *   improvedFiles: string[],
  * }}
  */
+// FIELD: the diff's movement enters as WORK, not as a coherency.
+// fixed/(fixed+new) is a count ratio — no compressor ever emitted it, so
+// feeding it as coherence was a false number (provenance purge 2026-08-09).
+// The counts are real load, so they ride recordCost, which passes through
+// the field's own current coherence — nothing invented. Best-effort;
+// never breaks a diff.
+function _contributeBaselineDelta(result) {
+  try {
+    const fixed = result.fixed.length, added = result.new.length;
+    if (fixed + added === 0) return;                    // nothing moved: no event
+    require('../core/field-coupling').recordCost({
+      units: fixed + added,
+      source: 'audit:baseline:delta',
+      kind: 'audit',
+    });
+  } catch (_) { quiet('audit:baseline:require', _); /* field optional */ }
+}
+_contributeBaselineDelta.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
 function diffAgainstBaseline(baseline, currentByFile, repoRoot) {
   const result = {
     new: [],
@@ -204,3 +225,13 @@ module.exports = {
   fingerprint,
   BASELINE_FILE,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+resolveBaselinePath.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+fingerprint.atomicProperties = { charge: -1, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+buildBaseline.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+writeBaseline.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+readBaseline.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+diffAgainstBaseline.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

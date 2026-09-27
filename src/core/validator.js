@@ -1,3 +1,5 @@
+const { quiet } = require('./quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 /**
  * Code validator — only code that PROVES itself gets stored.
  *
@@ -19,6 +21,7 @@ const { actionableFeedback, formatFeedback } = require('./feedback');
 const {
   MIN_COHERENCY_THRESHOLD,
   DEFAULT_VALIDATION_TIMEOUT_MS,
+  getDomainFloor,
 } = require('../constants/thresholds');
 
 /**
@@ -28,23 +31,36 @@ const {
  * @param {Object} options - Validation options
  * @param {string} [options.language] - Programming language (e.g., 'javascript', 'python')
  * @param {string} [options.testCode] - Test code to execute against the source code
- * @param {number} [options.threshold] - Minimum coherency threshold (default: MIN_COHERENCY_THRESHOLD)
+ * @param {number} [options.threshold] - Minimum coherency threshold. If omitted and
+ *   `options.domain` is provided, defaults to `getDomainFloor(options.domain)`
+ *   (e.g. security → 0.65, performance → 0.52). Otherwise defaults to
+ *   MIN_COHERENCY_THRESHOLD.
+ * @param {string} [options.domain] - Pattern domain (security, performance, ui,
+ *   core, etc.) for per-domain floor selection. See DOMAIN_FLOOR_ADJUSTMENTS.
  * @param {number} [options.timeout] - Test execution timeout in milliseconds (default: DEFAULT_VALIDATION_TIMEOUT_MS)
  * @param {string} [options.description] - Code description for covenant context
  * @param {string[]} [options.tags] - Code tags for covenant context
  * @param {boolean} [options.sandbox] - Use sandboxed execution if true (default: true)
- * @returns {{valid: boolean, testPassed: boolean|null, testOutput: string|null, coherencyScore: Object|null, covenantResult: Object|null, errors: string[], feedback: Object|null}} Validation result
+ * @returns {{valid: boolean, testPassed: boolean|null, testOutput: string|null, coherencyScore: Object|null, covenantResult: Object|null, errors: string[], feedback: Object|null, threshold: number, domain: string|null}} Validation result
  */
 function validateCode(code, options = {}) {
   if (code == null || typeof code !== 'string') {
     return { valid: false, testPassed: null, testOutput: null, coherencyScore: null, covenantResult: null, errors: ['Invalid input: code must be a non-null string'], feedback: null };
   }
-  const {
-    language,
-    testCode,
-    threshold = MIN_COHERENCY_THRESHOLD,
-    timeout = DEFAULT_VALIDATION_TIMEOUT_MS,
-  } = options;
+  const { language, testCode, timeout = DEFAULT_VALIDATION_TIMEOUT_MS } = options;
+  const domain = typeof options.domain === 'string' && options.domain ? options.domain : null;
+
+  // Threshold resolution: the domain floor is a non-negotiable MINIMUM.
+  // A caller may require a stricter threshold (raises the bar), but
+  // cannot drop below the per-domain floor — this is what makes
+  // security-tagged code refuse to clear at 0.60 even if the caller
+  // is happy with that elsewhere. See DOMAIN_FLOOR_ADJUSTMENTS in
+  // src/constants/thresholds.js.
+  const domainFloor = domain ? getDomainFloor(domain) : null;
+  const explicitThreshold = options.threshold;
+  const threshold = explicitThreshold !== undefined
+    ? (domainFloor !== null ? Math.max(explicitThreshold, domainFloor) : explicitThreshold)
+    : (domainFloor !== null ? domainFloor : MIN_COHERENCY_THRESHOLD);
 
   const result = {
     valid: false,
@@ -54,6 +70,8 @@ function validateCode(code, options = {}) {
     covenantResult: null,
     errors: [],
     feedback: null,
+    threshold,
+    domain,
   };
 
   // Determine content type — non-code content skips test execution but NOT the covenant
@@ -114,6 +132,41 @@ function validateCode(code, options = {}) {
 
   result.valid = result.errors.length === 0;
 
+  // ─── Domain-floor → LRE field contribution ────────────────────
+  // When a domain was supplied (so the per-domain floor mechanism
+  // engaged), contribute the result to the unified field. Tagged by
+  // domain so the source histogram shows which domains are gating
+  // patterns and at what coherency. Best-effort — never blocks
+  // validation if the field is unavailable.
+  if (domain) {
+    try {
+      const { recordCost } = require('./field-coupling');
+      // PROVENANCE (2026-08-09): the heuristic score total is not a
+      // compressor reading, and the old invalid→0 mapping INVENTED a
+      // number — a zero still crunches through the field's math as if it
+      // were measured. Withheld is not zero. The validation event is real
+      // work and rides recordCost, with the verdict in the source bucket;
+      // the artifact's lawful coherency already enters the field at the
+      // scorer's own void:compress_signal doorway.
+      recordCost({
+        units: 1,
+        kind: 'validation',
+        source: `validator:domain:${domain}:${result.valid ? 'valid' : 'rejected'}`,
+      });
+      // When the domain floor RATCHETED the threshold above what the
+      // caller asked for, emit a second observation so that ratcheting
+      // events are visible in the histogram. Cost reflects the bump
+      // size to weight the field signal.
+      if (explicitThreshold !== undefined && domainFloor !== null && domainFloor > explicitThreshold) {
+        recordCost({
+          units: Math.max(0.5, (domainFloor - explicitThreshold) * 10),
+          kind: 'ratchet',
+          source: `validator:domain-floor-ratchet:${domain}`,
+        });
+      }
+    } catch (_) { quiet('core:validator:recordCost', _); /* best-effort */ }
+  }
+
   // ─── Atomic auto-registration ─────────────────────────────────
   // When code passes validation, extract its atomic properties and
   // register it in the periodic table. This is the auto-registration
@@ -139,7 +192,7 @@ function validateCode(code, options = {}) {
       }
       result.atomicSignature = sig;
       result.atomicProperties = props;
-    } catch { /* atomic module not available — no-op */ }
+    } catch (_e) { quiet('core:validator:encodeSignature', _e); /* atomic module not available — no-op */ }
   }
 
   // Generate actionable feedback for any failures
@@ -172,7 +225,7 @@ function executeTest(code, testCode, language, timeout) {
       fs.writeFileSync(codeFile, code, 'utf-8');
       const hasRequire = /require\s*\(\s*['"][^'"]+['"]\s*\)/.test(testCode);
       const testContent = hasRequire
-        ? testCode.replace(/require\s*\(\s*['"](?:\.\.?\/[^'"]+)['"]\s*\)/g, `require('${codeFile}')`)
+        ? testCode.replace(/require\s*\(\s*['"](?:\.\.?\/[^'"]+)['"]\s*\)/g, `require(${JSON.stringify(codeFile)})`)
         : `${code}\n;\n${testCode}`;
       fs.writeFileSync(testFile, testContent, 'utf-8');
       try {
@@ -234,15 +287,5 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-validateCode.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-executeTest.atomicProperties = {
-  charge: 0, valence: 2, mass: 'heavy', spin: 'odd', phase: 'gas',
-  reactivity: 'high', electronegativity: 1, group: 3, period: 4,
-  harmPotential: 'moderate', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
+validateCode.atomicProperties = { charge: 1, valence: 4, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 3, period: 5, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+executeTest.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 1, group: 3, period: 4, harmPotential: "moderate", alignment: "neutral", intention: "neutral", domain: "utility" };

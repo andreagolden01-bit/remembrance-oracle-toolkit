@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('./quiet');
 
 /**
  * Unified healing pipeline.
@@ -205,7 +206,7 @@ async function tryConfidentLevel(source, envelope, options) {
   if (after.audit.findings.length > envelope.audit.findings.length) {
     return { success: false, level: 'confident', reason: 'auto-fix introduced new findings' };
   }
-  return {
+  const __retVal = {
     success: true,
     level: 'confident',
     patches,
@@ -213,6 +214,19 @@ async function tryConfidentLevel(source, envelope, options) {
     after: { coherency: after.coherency, findings: after.allFindings },
     source: nextSource,
   };
+  // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:heal:tryConfidentLevel' });
+        break;
+      } catch (_) { quiet('core:heal:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('core:heal:__recordCost', _); /* best-effort */ }
+  return __retVal;
 }
 
 async function trySerfLevel(source, envelope, options) {
@@ -357,7 +371,7 @@ async function trySwarmLevel(source, envelope, options) {
       if (!providers || providers.length === 0) {
         return { success: false, level: 'swarm', reason: 'no swarm providers configured' };
       }
-    } catch { /* ignore — proceed to full call */ }
+    } catch (_e) { quiet('core:heal:getAvailableProviders', _e); /* ignore — proceed to full call */ }
   }
 
   try {
@@ -496,3 +510,20 @@ module.exports = {
   // Exposed for tests
   _tryConfidentLevel: tryConfidentLevel,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+levelIndex.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+heal.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+tryConfidentLevel.atomicProperties = { charge: 0, valence: 3, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 13, period: 3, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
+trySerfLevel.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 2, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+tryLlmLevel.atomicProperties = { charge: 1, valence: 1, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 2, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+buildLlmResult.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+trySwarmLevel.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 1, group: 9, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+buildSwarmResult.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+tryGenerateLevel.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+filterTargetable.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+buildLlmPrompt.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractCodeBlock.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+replaceEnclosingFunction.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

@@ -1,4 +1,5 @@
 'use strict';
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 /**
  * Proposal Expiry — trims the lexicon-proposals.json queue.
@@ -46,12 +47,7 @@ function runExpiry() {
   fs.writeFileSync(PROPOSAL_FILE, JSON.stringify(kept, null, 2));
   return { changed: true, expired, dropped, totalRemaining: kept.length };
 }
-runExpiry.atomicProperties = {
-  charge: -1, valence: 1, mass: 'light', spin: 'even', phase: 'solid',
-  reactivity: 'stable', electronegativity: 0.5, group: 12, period: 4,
-  harmPotential: 'minimal', alignment: 'healing', intention: 'benevolent',
-  domain: 'covenant',
-};
+runExpiry.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 if (require.main === module) {
   const r = runExpiry();
@@ -60,3 +56,8 @@ if (require.main === module) {
 }
 
 module.exports = { runExpiry, EXPIRE_AFTER_DAYS, DROP_EXPIRED_AFTER_DAYS };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+ageDays.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

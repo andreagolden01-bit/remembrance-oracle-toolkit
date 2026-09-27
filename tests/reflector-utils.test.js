@@ -8,11 +8,11 @@ const { ensureDir, loadJSON, saveJSON, trimArray } = require('../src/reflector/s
 
 // ── Temp directory helper ──
 
-function makeTempDir() {
+const makeTempDir = () => {
   const dir = join(tmpdir(), `reflector-utils-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
-}
+};
 
 describe('reflector utils — ensureDir', () => {
   it('should create a directory if it does not exist', () => {

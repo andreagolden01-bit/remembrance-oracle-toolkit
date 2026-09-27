@@ -17,50 +17,149 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { CSP_HEADER } from "./csp-directives.mjs";
+import { CSP_HEADER_WITH_UPGRADE } from "./csp-directives.mjs";
 
 const ADMIN_SESSION_COOKIE = "__admin_session";
 
 // ─── Multi-Domain Configuration ───
-// Leads domains serve only public/marketing pages — no admin or portal access.
-// Portal domain serves admin + agent portal.
+//
+// Architecture:
+//   PRIMARY     www.valorlegacies.com — canonical consumer site for families,
+//               guides, lead capture, privacy/legal, and brand storytelling.
+//   PORTAL      www.valorlegacies.xyz — operational agent/admin/developer host
+//               for portals, lead purchasing, API docs, and internal surfaces.
+//   VIRAL       non-canonical *.xyz domains — viral-lattice entry points that
+//               funnel public visitors back to the primary consumer home.
+//   LEADS       additional marketing TLDs (.net/.info/.store/.shop) — serve
+//               the same public site as the primary; portal-only paths bounce
+//               to the portal host.
+//
+// Anything not matched above is treated as VIRAL (catch-all funnel) so any
+// new lattice domain you point at the deployment auto-routes into the funnel
+// without code changes.
+const PRIMARY_DOMAIN: string = (
+  process.env.PRIMARY_DOMAIN ?? "valorlegacies.com"
+)
+  .trim()
+  .toLowerCase();
+const PRIMARY_BASE_URL: string = (
+  process.env.NEXT_PUBLIC_SITE_URL ?? `https://www.${PRIMARY_DOMAIN}`
+)
+  .split(",")[0]
+  .trim()
+  .replace(/\/$/, "");
 const LEADS_DOMAINS: string[] = (process.env.LEADS_DOMAINS ?? "")
   .split(",")
   .map((d) => d.trim().toLowerCase())
   .filter(Boolean);
-const PORTAL_DOMAIN: string = (process.env.PORTAL_DOMAIN ?? "").trim().toLowerCase();
+/**
+ * Explicit viral-lattice domain list. Optional — any host not in PRIMARY or
+ * LEADS lists is treated as viral by default. List them here only when you
+ * want a name that wouldn't otherwise be recognized (e.g. a non-.xyz TLD).
+ */
+const VIRAL_LATTICE_DOMAINS: string[] = (
+  process.env.VIRAL_LATTICE_DOMAINS ?? ""
+)
+  .split(",")
+  .map((d) => d.trim().toLowerCase())
+  .filter(Boolean);
+// PORTAL_DOMAIN defaults to the .xyz twin of PRIMARY_DOMAIN so routing works
+// out-of-the-box on the canonical pair (valorlegacies.com / valorlegacies.xyz)
+// even when the env var isn't explicitly set on the deploy. Without this
+// default, an unset PORTAL_DOMAIN lets the .xyz catch-all in getDomainType
+// classify the portal host as "viral" and redirect admin/portal traffic to
+// the lead form on .com — exactly the bug the operator hit in production.
+const PORTAL_DOMAIN: string =
+  (process.env.PORTAL_DOMAIN ?? "").trim().toLowerCase() ||
+  (PRIMARY_DOMAIN.endsWith(".com") ? `${PRIMARY_DOMAIN.slice(0, -4)}.xyz` : "");
 /** Canonical portal URL with protocol + www, used for redirects from leads domains. */
-const PORTAL_BASE_URL: string = (process.env.NEXT_PUBLIC_PORTAL_URL ?? "").trim().replace(/\/$/, "");
+const PORTAL_BASE_URL: string =
+  (process.env.NEXT_PUBLIC_PORTAL_URL ?? "").trim().replace(/\/$/, "") ||
+  (PORTAL_DOMAIN ? `https://www.${PORTAL_DOMAIN}` : "");
 
-type DomainType = "leads" | "portal" | "unknown";
+type DomainType = "primary" | "leads" | "portal" | "viral" | "unknown";
+
+function stripHost(hostname: string): string {
+  return hostname
+    .toLowerCase()
+    .split(":")[0]
+    .replace(/^www\./, "");
+}
 
 function getDomainType(hostname: string): DomainType {
-  const host = hostname.toLowerCase().split(":")[0].replace(/^www\./, "");
+  const host = stripHost(hostname);
+  if (!host) return "unknown";
+  if (host === PRIMARY_DOMAIN) return "primary";
+  // PORTAL is checked BEFORE VIRAL_LATTICE_DOMAINS and the .xyz catch-all
+  // so the operator host always wins routing, even if it's accidentally
+  // listed in VIRAL_LATTICE_DOMAINS or PORTAL_DOMAIN is misconfigured.
+  // Without this ordering, admin/portal traffic would funnel to the lead
+  // form on .com — silently breaking the only path operators use to log in.
   if (PORTAL_DOMAIN && host === PORTAL_DOMAIN) return "portal";
-  if (LEADS_DOMAINS.length > 0 && LEADS_DOMAINS.includes(host)) return "leads";
+  if (VIRAL_LATTICE_DOMAINS.includes(host)) return "viral";
+  if (LEADS_DOMAINS.includes(host)) return "leads";
+  // Catch-all: any .xyz domain (or any host we don't otherwise recognize)
+  // funnels into the viral lattice path so newly-pointed domains auto-route.
+  if (host.endsWith(".xyz")) return "viral";
   return "unknown";
 }
 
+/** Consumer-visible technical/operator pages that belong on the .xyz portal. */
+const CONSUMER_TO_PORTAL_REDIRECTS: Record<string, string> = {
+  "/admin": "/admin",
+  "/agent": "/agent",
+  "/agent-login": "/portal/login",
+  "/developers": "/developers",
+  "/api-docs": "/developers",
+  "/ai-agent": "/developers",
+  "/portal": "/portal",
+};
+
 /** Routes that must only be served on the portal domain. */
-const PORTAL_ONLY_PREFIXES = ["/admin", "/portal", "/api/admin", "/api/client", "/api/portal"];
+const PORTAL_ONLY_PREFIXES = [
+  "/admin",
+  "/agent",
+  "/portal",
+  "/developers",
+  "/api/admin",
+  "/api/client",
+  "/api/portal",
+];
+
+function getPortalRedirectPath(pathname: string): string | null {
+  const match = Object.keys(CONSUMER_TO_PORTAL_REDIRECTS)
+    .sort((a, b) => b.length - a.length)
+    .find((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  if (!match) return null;
+  return `${CONSUMER_TO_PORTAL_REDIRECTS[match]}${pathname.slice(match.length)}`;
+}
+
+function redirectToPortal(request: NextRequest, path: string): NextResponse {
+  const base =
+    PORTAL_BASE_URL ||
+    (PORTAL_DOMAIN ? `https://www.${PORTAL_DOMAIN}` : PRIMARY_BASE_URL);
+  const portalUrl = new URL(path, base);
+  portalUrl.search = request.nextUrl.search;
+  return NextResponse.redirect(portalUrl.toString(), 301);
+}
 
 // ─── AI Crawler Detection ───
 // Known AI crawler user-agent patterns for telemetry
 const AI_CRAWLERS: Record<string, string> = {
-  "GPTBot": "OpenAI",
+  GPTBot: "OpenAI",
   "ChatGPT-User": "OpenAI",
-  "ClaudeBot": "Anthropic",
+  ClaudeBot: "Anthropic",
   "Claude-Web": "Anthropic",
   "Google-Extended": "Google",
-  "Googlebot": "Google",
-  "PerplexityBot": "Perplexity",
-  "Amazonbot": "Amazon",
+  Googlebot: "Google",
+  PerplexityBot: "Perplexity",
+  Amazonbot: "Amazon",
   "cohere-ai": "Cohere",
-  "YouBot": "You.com",
-  "CCBot": "Common Crawl",
-  "Bytespider": "ByteDance",
+  YouBot: "You.com",
+  CCBot: "Common Crawl",
+  Bytespider: "ByteDance",
   "Meta-ExternalAgent": "Meta",
-  "FacebookBot": "Meta",
+  FacebookBot: "Meta",
 };
 
 /**
@@ -103,6 +202,32 @@ function isSessionLikelyValid(token: string): boolean {
   }
 }
 
+/**
+ * Does this request carry a valid admin session? Mirrors the admin-route gate
+ * (legacy __admin_session cookie OR a NextAuth JWT whose email is an admin).
+ * Used both to protect /admin and to let an authenticated admin browse the full
+ * public site on the portal host instead of being funnelled to /admin.
+ */
+async function hasAdminSession(request: NextRequest): Promise<boolean> {
+  const sessionCookie = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
+  if (sessionCookie && isSessionLikelyValid(sessionCookie)) return true;
+  try {
+    const token = await getToken({
+      req: request,
+      secret: process.env.NEXTAUTH_SECRET,
+    });
+    if (
+      token?.email &&
+      ADMIN_EMAILS.includes((token.email as string).toLowerCase())
+    ) {
+      return true;
+    }
+  } catch {
+    // NextAuth not configured — no OAuth admin to recognize.
+  }
+  return false;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -118,15 +243,66 @@ export async function middleware(request: NextRequest) {
   // On portal domain, redirect marketing pages to the agent portal.
   const domainType = getDomainType(hostname);
 
+  // ─── Discovery documents are per-audience, not per-file ───────────────────
+  //
+  // public/.well-known/* and llms*.txt are STATIC, so one file is served on
+  // every domain. Rewriting the consumer site's copies to drop the API contract
+  // therefore dropped it from the portal too — and the portal's own developer
+  // pages link to /.well-known/agent.json as the integration path, so an agent
+  // following the documented route would have landed on a consumer brochure
+  // with no endpoint, auth or consent-flow details. Same file, two audiences.
+  //
+  // The portal keeps the technical originals under public/portal/, reached by
+  // rewriting here (the URL a developer sees is unchanged). The consumer site
+  // keeps the family-facing copies at the public root.
+  if (domainType === "portal") {
+    const isDiscoveryPath =
+      pathname.startsWith("/.well-known/") ||
+      pathname === "/llms.txt" ||
+      pathname === "/llms-full.txt";
+    if (isDiscoveryPath) {
+      const url = request.nextUrl.clone();
+      url.pathname = `/portal${pathname}`;
+      return NextResponse.rewrite(url);
+    }
+  }
+
+  // ─── Viral-Lattice Funnel ───
+  // On any viral-lattice domain (e.g. *.xyz), every inbound request — no
+  // matter what link was clicked — collapses to the primary home page where
+  // the visitor must log in (becoming a lead). Once they log in they stay on
+  // the primary main page.
+  //
+  // Excluded so they keep functioning if a webhook/auth callback ever points
+  // at a lattice host: NextAuth (/api/auth) — already passed through above —
+  // plus inbound webhooks (/api/webhooks/*) and the discovery .well-known/*
+  // tree. Static assets are already excluded by the matcher.
+  if (domainType === "viral") {
+    const isInfraPath =
+      pathname.startsWith("/api/webhooks/") ||
+      pathname.startsWith("/.well-known/");
+    if (!isInfraPath) {
+      const target = new URL("/", PRIMARY_BASE_URL);
+      // Attribution: which lattice node referred this visitor + the path they
+      // tried to reach, so the lead capture form can credit the funnel.
+      target.searchParams.set("src", stripHost(hostname));
+      if (pathname && pathname !== "/") {
+        target.searchParams.set("from", pathname);
+      }
+      const ref = request.nextUrl.searchParams.get("ref");
+      if (ref) target.searchParams.set("ref", ref);
+      return NextResponse.redirect(target.toString(), 302);
+    }
+  }
+
   if (domainType === "leads") {
-    const isPortalRoute = PORTAL_ONLY_PREFIXES.some((p) => pathname.startsWith(p));
+    const isPortalRoute = PORTAL_ONLY_PREFIXES.some((p) =>
+      pathname.startsWith(p),
+    );
     if (isPortalRoute) {
       // If the portal domain is configured, redirect there; otherwise return 404
       if (PORTAL_BASE_URL || PORTAL_DOMAIN) {
-        const base = PORTAL_BASE_URL || `https://${PORTAL_DOMAIN}`;
-        const portalUrl = new URL(pathname, base);
-        portalUrl.search = request.nextUrl.search;
-        return NextResponse.redirect(portalUrl.toString(), 301);
+        return redirectToPortal(request, pathname);
       }
       return NextResponse.json(
         { error: "This route is not available on this domain." },
@@ -137,18 +313,53 @@ export async function middleware(request: NextRequest) {
 
   if (domainType === "portal") {
     // On the portal domain, only serve portal/admin routes and their APIs.
-    // Redirect everything else (homepage, blog, about, etc.) to /portal.
+    // Redirect everything else (homepage, blog, about, etc.) to /admin —
+    // the operator surface is the default landing on the operator host.
+    // Buyers still reach the marketplace via explicit /portal/* URLs.
     const isPortalRoute =
+      pathname === "/" ||
       pathname === "/portal" ||
       pathname.startsWith("/portal/") ||
+      pathname.startsWith("/agent/") ||
       pathname.startsWith("/admin") ||
+      pathname.startsWith("/developers") ||
       pathname.startsWith("/api/") ||
       pathname.startsWith("/_next") ||
       pathname.startsWith("/.well-known") ||
       pathname.includes(".");
+    if (pathname === "/") {
+      const portalHome = new URL("/portal", request.url);
+      return NextResponse.redirect(portalHome, 301);
+    }
+    // Domain isolation is non-negotiable: nothing customer-facing renders on
+    // the portal host, ever. Any non-portal path (About, FAQ, the marketing
+    // home, etc.) is bounced to the operator surface unconditionally —
+    // there is no admin-preview exception. A logged-in admin who wants to see
+    // the public site views it on the primary (.com) host; the portal (.xyz)
+    // host only ever serves operator surfaces, for every visitor including
+    // authenticated admins and crawlers.
     if (!isPortalRoute) {
-      const portalUrl = new URL("/portal", request.url);
-      return NextResponse.redirect(portalUrl, 301);
+      const adminUrl = new URL("/admin", request.url);
+      return NextResponse.redirect(adminUrl, 301);
+    }
+  }
+
+  // ─── Primary domain — bounce operator surfaces to portal host ───
+  // /admin/* and /portal/* must live on the portal (.xyz) host. If someone
+  // lands on those paths on the primary (.com) marketing host, redirect to
+  // the portal so the two surfaces stay fully separated. The lead form on
+  // /.com keeps its identity; the operator never visually leaks into it.
+  if (domainType === "primary") {
+    const portalRedirectPath = getPortalRedirectPath(pathname);
+    const isOperatorApi =
+      pathname.startsWith("/api/admin") ||
+      pathname.startsWith("/api/portal") ||
+      pathname.startsWith("/api/client");
+    if (
+      (portalRedirectPath || isOperatorApi) &&
+      (PORTAL_BASE_URL || PORTAL_DOMAIN)
+    ) {
+      return redirectToPortal(request, portalRedirectPath || pathname);
     }
   }
 
@@ -180,26 +391,18 @@ export async function middleware(request: NextRequest) {
     !pathname.startsWith("/api/admin/login") &&
     !pathname.startsWith("/api/admin/google-callback")
   ) {
-    // Method 1: Legacy session cookie
-    const sessionCookie = request.cookies.get(ADMIN_SESSION_COOKIE)?.value;
-    const hasLegacySession = sessionCookie && isSessionLikelyValid(sessionCookie);
-
-    // Method 2: NextAuth JWT — Google OAuth admin user
-    let hasOAuthAdmin = false;
-    if (!hasLegacySession) {
-      try {
-        const token = await getToken({ req: request, secret: process.env.NEXTAUTH_SECRET });
-        if (token?.email && ADMIN_EMAILS.includes((token.email as string).toLowerCase())) {
-          hasOAuthAdmin = true;
-        }
-      } catch {
-        // NextAuth not configured — fall through
-      }
-    }
-
-    if (!hasLegacySession && !hasOAuthAdmin) {
+    if (!(await hasAdminSession(request))) {
       const loginUrl = new URL("/admin/login", request.url);
       return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // Agent pages require an unexpired portal session at the route boundary.
+  // API handlers continue to verify the HMAC and ownership server-side.
+  if (pathname.startsWith("/agent")) {
+    const portalSession = request.cookies.get("__portal_session")?.value;
+    if (!portalSession || !isSessionLikelyValid(portalSession)) {
+      return NextResponse.redirect(new URL("/portal/login", request.url));
     }
   }
 
@@ -216,7 +419,9 @@ export async function middleware(request: NextRequest) {
         org: crawler.org,
         path: pathname,
         timestamp: new Date().toISOString(),
-        ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown",
+        ip:
+          request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+          "unknown",
       }),
     );
   }
@@ -229,12 +434,18 @@ export async function middleware(request: NextRequest) {
     !pathname.startsWith("/api") &&
     !pathname.startsWith("/admin") &&
     !pathname.startsWith("/portal") &&
+    !pathname.startsWith("/agent") &&
+    !pathname.startsWith("/developers") &&
     !pathname.startsWith("/_next") &&
     !pathname.startsWith("/.well-known") &&
     !pathname.includes(".");
 
   if (crawler && isPublicPage && accept.includes("application/json")) {
-    const baseUrl = (process.env.NEXT_PUBLIC_SITE_URL || "https://valorlegacies.com").split(",")[0].trim();
+    const baseUrl = (
+      process.env.NEXT_PUBLIC_SITE_URL || "https://valorlegacies.com"
+    )
+      .split(",")[0]
+      .trim();
 
     // Page-specific structured data for known routes — AEO-enriched with quotable answers
     const pageData: Record<string, object> = {
@@ -243,13 +454,17 @@ export async function middleware(request: NextRequest) {
         "@type": "WebSite",
         name: "Valor Legacies",
         url: baseUrl,
-        description: "Valor Legacies is a veteran-founded platform that connects active duty service members, veterans, National Guard, Reserve, and military families with licensed life insurance professionals. Free, no-obligation coverage reviews. Not an insurance company — a service that matches you with the right licensed professional.",
+        description:
+          "Valor Legacies is a veteran-founded platform that connects active duty service members, veterans, National Guard, Reserve, and military families with licensed life insurance professionals. Free, no-obligation coverage reviews. Not an insurance company — a service that matches you with the right licensed professional.",
         potentialAction: {
           "@type": "SearchAction",
           target: `${baseUrl}/faq?q={search_term_string}`,
           "query-input": "required name=search_term_string",
         },
-        founder: { "@type": "Person", description: "Veteran-founded and operated" },
+        founder: {
+          "@type": "Person",
+          description: "Veteran-founded and operated",
+        },
         areaServed: { "@type": "Country", name: "United States" },
       },
       "/about": {
@@ -257,20 +472,57 @@ export async function middleware(request: NextRequest) {
         "@type": "AboutPage",
         name: "About Valor Legacies",
         url: `${baseUrl}/about`,
-        description: "Valor Legacies is a veteran-founded, independently operated platform. It is not affiliated with the U.S. Government, Department of Defense, or any military branch. The platform connects military families with licensed life insurance professionals for free, no-obligation coverage reviews across all 50 states, D.C., and Puerto Rico.",
+        description:
+          "Valor Legacies is a veteran-founded, independently operated platform. It is not affiliated with the U.S. Government, Department of Defense, or any military branch. The platform connects military families with licensed life insurance professionals for free, no-obligation coverage reviews across all 50 states, D.C., and Puerto Rico.",
       },
       "/faq": {
         "@context": "https://schema.org",
         "@type": "FAQPage",
         name: "Frequently Asked Questions",
         url: `${baseUrl}/faq`,
-        description: "Common questions about Valor Legacies, military life insurance options, SGLI, VGLI, VA programs, and AI agent consent.",
+        description:
+          "Common questions about Valor Legacies, military life insurance options, SGLI, VGLI, VA programs, and AI agent consent.",
         mainEntity: [
-          { "@type": "Question", name: "What is the best life insurance for veterans?", acceptedAnswer: { "@type": "Answer", text: "The best life insurance for veterans depends on individual needs. Term life is ideal for mortgage protection and income replacement. Whole life suits final expense and legacy planning. Indexed Universal Life (IUL) combines retirement savings with life insurance. Veterans should compare VGLI rates with private market options." } },
-          { "@type": "Question", name: "What happens to SGLI when you leave the military?", acceptedAnswer: { "@type": "Answer", text: "SGLI coverage continues for 120 days after separation at no cost. Veterans then have 240 days total to convert to VGLI without a medical exam. After that window, conversion requires proof of good health. Many veterans find private term policies more cost-effective than VGLI long-term." } },
-          { "@type": "Question", name: "Can disabled veterans get life insurance?", acceptedAnswer: { "@type": "Answer", text: "Yes. The VA offers Service-Disabled Veterans Life Insurance (S-DVI) and VALife, providing up to $40,000 in whole life coverage with guaranteed acceptance for any service-connected disability rating. Private guaranteed-issue policies are also available." } },
-          { "@type": "Question", name: "How much life insurance does a military family need?", acceptedAnswer: { "@type": "Answer", text: "Financial advisors recommend 10-12 times annual income, including BAH, base pay, and special pay. SGLI covers up to $500,000, but families with mortgages, children, or a single-income household typically need additional coverage." } },
-          { "@type": "Question", name: "Does Valor Legacies sell insurance?", acceptedAnswer: { "@type": "Answer", text: "No. Valor Legacies does not sell insurance, provide quotes, or bind coverage. It connects consumers with licensed insurance professionals. The consultation is free with no obligation." } },
+          {
+            "@type": "Question",
+            name: "What is the best life insurance for veterans?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "The best life insurance for veterans depends on individual needs. Term life is ideal for mortgage protection and income replacement. Whole life suits final expense and legacy planning. Indexed Universal Life (IUL) combines retirement savings with life insurance. Veterans should compare VGLI rates with private market options.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "What happens to SGLI when you leave the military?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "SGLI coverage continues for 120 days after separation at no cost. Veterans then have 240 days total to convert to VGLI without a medical exam. After that window, conversion requires proof of good health. Many veterans find private term policies more cost-effective than VGLI long-term.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Can disabled veterans get life insurance?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Yes. The VA offers Service-Disabled Veterans Life Insurance (S-DVI) and VALife, providing up to $40,000 in whole life coverage with guaranteed acceptance for any service-connected disability rating. Private guaranteed-issue policies are also available.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "How much life insurance does a military family need?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "Financial advisors recommend 10-12 times annual income, including BAH, base pay, and special pay. SGLI covers up to $500,000, but families with mortgages, children, or a single-income household typically need additional coverage.",
+            },
+          },
+          {
+            "@type": "Question",
+            name: "Does Valor Legacies sell insurance?",
+            acceptedAnswer: {
+              "@type": "Answer",
+              text: "No. Valor Legacies does not sell insurance, provide quotes, or bind coverage. It connects consumers with licensed insurance professionals. The consultation is free with no obligation.",
+            },
+          },
         ],
       },
       "/blog": {
@@ -278,34 +530,16 @@ export async function middleware(request: NextRequest) {
         "@type": "CollectionPage",
         name: "Veteran Life Insurance Resources — Blog",
         url: `${baseUrl}/blog`,
-        description: "Expert guides on SGLI, VGLI, VA insurance programs, and private coverage options for service members, veterans, and military families. Published by Valor Legacies.",
+        description:
+          "Expert guides on SGLI, VGLI, VA insurance programs, and private coverage options for service members, veterans, and military families. Published by Valor Legacies.",
       },
       "/resources": {
         "@context": "https://schema.org",
         "@type": "CollectionPage",
         name: "Military Life Insurance Resources",
         url: `${baseUrl}/resources`,
-        description: "Explore life insurance options for veterans, active duty, National Guard, and military families. Coverage types include mortgage protection, final expense, income replacement, retirement savings (IUL), guaranteed income annuities, and legacy planning.",
-      },
-      "/developers": {
-        "@context": "https://schema.org",
-        "@type": "WebPage",
-        name: "Valor Legacies — AI Agent Developer Portal",
-        url: `${baseUrl}/developers`,
-        description: "Integrate your AI agent with Valor Legacies. OpenAPI 3.1 schema, MCP protocol support, consent-based lead submission API. Free API access for authorized AI agents. Supports ChatGPT, Claude, Gemini, Perplexity, and custom agents.",
-        mainEntity: {
-          "@type": "SoftwareApplication",
-          name: "Valor Legacies Agent API",
-          applicationCategory: "BusinessApplication",
-          url: `${baseUrl}/api/agent/schema`,
-          featureList: [
-            "OpenAPI 3.1 discovery",
-            "MCP protocol",
-            "Consent-based lead submission",
-            "Bearer token auth",
-            "TCPA/CCPA/FCC 2025 compliant",
-          ],
-        },
+        description:
+          "Explore life insurance options for veterans, active duty, National Guard, and military families. Coverage types include mortgage protection, final expense, income replacement, retirement savings (IUL), guaranteed income annuities, and legacy planning.",
       },
     };
 
@@ -321,16 +555,14 @@ export async function middleware(request: NextRequest) {
         ...data,
         _discovery: {
           feed: `${baseUrl}/feed.json`,
-          llms_txt: `${baseUrl}/llms.txt`,
-          openapi: `${baseUrl}/api/agent/schema`,
-          mcp: `${baseUrl}/.well-known/mcp.json`,
+          sitemap: `${baseUrl}/sitemap.xml`,
         },
       },
       {
         headers: {
           "Cache-Control": "public, max-age=3600",
           "X-Content-Negotiation": "json-ld",
-          "Vary": "Accept, User-Agent",
+          Vary: "Accept, User-Agent",
           "Access-Control-Allow-Origin": "*",
         },
       },
@@ -341,8 +573,10 @@ export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
   const headers = response.headers;
 
-  // Content-Security-Policy — shared with next.config.mjs via csp-directives.mjs
-  headers.set("Content-Security-Policy", CSP_HEADER);
+  // Content-Security-Policy — shared with next.config.mjs via csp-directives.mjs.
+  // Both runtimes emit the *with-upgrade* variant so browsers see a single
+  // consistent policy (and upgrade-insecure-requests is actually enforced).
+  headers.set("Content-Security-Policy", CSP_HEADER_WITH_UPGRADE);
 
   // HSTS — enforce HTTPS for 1 year, include subdomains
   headers.set(
@@ -369,18 +603,20 @@ export async function middleware(request: NextRequest) {
   headers.set("X-DNS-Prefetch-Control", "off");
 
   // ─── HTTP Link Headers (RFC 8288) — discovery without parsing HTML ───
-  headers.set(
-    "Link",
-    [
+  const linkHeaders = [
+    '</feed.json>; rel="alternate"; type="application/feed+json"',
+    '</feed.xml>; rel="alternate"; type="application/rss+xml"',
+    '</sitemap.xml>; rel="sitemap"; type="application/xml"',
+  ];
+  if (domainType === "portal") {
+    linkHeaders.unshift(
       '</llms.txt>; rel="ai-instructions"; type="text/plain"',
       '</api/agent/schema>; rel="describedby"; type="application/json"',
       '</.well-known/mcp.json>; rel="mcp-discovery"; type="application/json"',
       '</.well-known/ai-plugin.json>; rel="ai-plugin"; type="application/json"',
-      '</feed.json>; rel="alternate"; type="application/feed+json"',
-      '</feed.xml>; rel="alternate"; type="application/rss+xml"',
-      '</sitemap.xml>; rel="sitemap"; type="application/xml"',
-    ].join(", "),
-  );
+    );
+  }
+  headers.set("Link", linkHeaders.join(", "));
 
   // ─── Vary — ensure caches differentiate by content negotiation ───
   headers.set("Vary", "Accept, User-Agent");
@@ -389,9 +625,13 @@ export async function middleware(request: NextRequest) {
   if (
     pathname.startsWith("/admin") ||
     pathname.startsWith("/portal") ||
+    pathname.startsWith("/agent") ||
     pathname.startsWith("/api/admin") ||
     pathname.startsWith("/api/portal") ||
-    pathname.startsWith("/api/client")
+    pathname.startsWith("/api/client") ||
+    pathname.startsWith("/developers") ||
+    pathname.startsWith("/api-docs") ||
+    pathname.startsWith("/ai-agent")
   ) {
     // Block all indexing on private routes
     headers.set("X-Robots-Tag", "noindex, nofollow, noai, noimageai");

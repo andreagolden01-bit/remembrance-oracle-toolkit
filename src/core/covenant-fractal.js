@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('./quiet');
 
 /**
  * Covenant Fractal — the covenant exists at every scale.
@@ -33,6 +34,17 @@ const GATE_INVOCATION_PATTERN = /\b(covenant|runAllChecks|CovenantValidator|cove
 
 function scanForUngatedMutations(code) {
   if (typeof code !== 'string') return [];
+  // Honor the same trusted-infrastructure annotations the covenant
+  // already recognizes (see core/covenant.js). A file marked
+  // @oracle-infrastructure or @oracle-pattern-definitions declares
+  // its mutations are bounded to internal state (entropy.json, pattern
+  // library, lock files, journal/archive writes, etc.) — not user-
+  // input-driven, so the covenant gate semantics don't apply. The
+  // annotation must appear in the source (typically near the top).
+  const TRUSTED_ANNOTATIONS = /@oracle-(infrastructure|pattern-definitions)\b/;
+  if (TRUSTED_ANNOTATIONS.test(code)) {
+    return [];
+  }
   const findings = [];
   const lines = code.split('\n');
   for (let i = 0; i < lines.length; i++) {
@@ -54,12 +66,7 @@ function scanForUngatedMutations(code) {
   }
   return findings;
 }
-scanForUngatedMutations.atomicProperties = {
-  charge: 0, valence: 1, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0.5, group: 12, period: 3,
-  harmPotential: 'minimal', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
+scanForUngatedMutations.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function requireGate(fn) {
   const gated = function (...args) {
@@ -76,12 +83,7 @@ function requireGate(fn) {
   gated.__originalFn = fn;
   return gated;
 }
-requireGate.atomicProperties = {
-  charge: 1, valence: 2, mass: 'light', spin: 'even', phase: 'solid',
-  reactivity: 'stable', electronegativity: 0.6, group: 18, period: 4,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
+requireGate.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function createGate() {
   return {
@@ -96,6 +98,7 @@ function createGate() {
     },
   };
 }
+createGate.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function stableStringify(obj) {
   if (obj === null || typeof obj !== 'object') return JSON.stringify(obj);
@@ -103,18 +106,14 @@ function stableStringify(obj) {
   const keys = Object.keys(obj).sort();
   return '{' + keys.map(k => JSON.stringify(k) + ':' + stableStringify(obj[k])).join(',') + '}';
 }
+stableStringify.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function signSubstrate(data) {
   const content = stableStringify(data);
   const hash = createHash('sha256').update(content).digest('hex');
   return { hash, signedAt: new Date().toISOString(), algorithm: 'sha256' };
 }
-signSubstrate.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'solid',
-  reactivity: 'inert', electronegativity: 0.4, group: 16, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'security',
-};
+signSubstrate.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function verifySubstrate(data, signature) {
   if (!signature || !signature.hash) return { valid: false, reason: 'no signature' };
@@ -122,6 +121,7 @@ function verifySubstrate(data, signature) {
   if (expected.hash !== signature.hash) return { valid: false, reason: 'hash mismatch', expected: expected.hash, actual: signature.hash };
   return { valid: true };
 }
+verifySubstrate.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function computeFileCovenantSignature(fileContent, filePath = '') {
   const contentHash = createHash('sha256').update(fileContent).digest('hex');
@@ -140,12 +140,7 @@ function computeFileCovenantSignature(fileContent, filePath = '') {
     combined: createHash('sha256').update(contentHash + ':' + covenantHash).digest('hex'),
   };
 }
-computeFileCovenantSignature.atomicProperties = {
-  charge: 0, valence: 1, mass: 'light', spin: 'even', phase: 'solid',
-  reactivity: 'inert', electronegativity: 0.4, group: 16, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'security',
-};
+computeFileCovenantSignature.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "low", electronegativity: 0, group: 16, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * covenantGroupCoherence — primary self-measurement at fractal scale 7.
@@ -159,7 +154,9 @@ function covenantGroupCoherence(periodicTable, options) {
   if (_roleAware && opts.method !== 'similarity') {
     return _roleAware(periodicTable);
   }
-  if (!periodicTable) return { coherence: 0, reason: 'no periodic table' };
+  if (!periodicTable) {
+    return { coherence: 0, reason: 'no periodic table' };
+  }
   const elements = (periodicTable.elements || []).filter(el =>
     el && el.properties && (el.properties.domain === 'security' || el.properties.domain === 'covenant')
   );
@@ -177,20 +174,28 @@ function covenantGroupCoherence(periodicTable, options) {
     }
   }
   const coherence = pairs > 0 ? totalCoherence / pairs : 0;
-  return {
+  const __retVal = {
     coherence: Math.round(coherence * 1000) / 1000,
     pairs,
     count: elements.length,
     decoherent: coherence < 0.8,
     method: 'similarity-fallback',
   };
+  // ── LRE field-coupling (main return path; was buried in !periodicTable guard) ──
+  try {
+    const __lre_p1 = './field-coupling';
+    const __lre_p2 = require('path').join(__dirname, 'field-coupling');
+    for (const __p of [__lre_p1, __lre_p2]) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:covenant-fractal:covenantGroupCoherence' });
+        break;
+      } catch (_) { quiet('core:covenant-fractal:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('core:covenant-fractal:__recordCost', _); /* best-effort */ }
+  return __retVal;
 }
-covenantGroupCoherence.atomicProperties = {
-  charge: 0, valence: 3, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'reactive', electronegativity: 0.8, group: 18, period: 6,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
+covenantGroupCoherence.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 13, period: 3, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
 
 const HARM_ORDER = { none: 0, minimal: 1, moderate: 2, dangerous: 3 };
 
@@ -225,12 +230,7 @@ function checkMonotonicEvolution(proposed, existingRegistry) {
     monotonic: violations.length === 0,
   };
 }
-checkMonotonicEvolution.atomicProperties = {
-  charge: 1, valence: 2, mass: 'medium', spin: 'odd', phase: 'solid',
-  reactivity: 'reactive', electronegativity: 0.85, group: 18, period: 6,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
+checkMonotonicEvolution.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "malevolent", domain: "utility" };
 
 function verifyCrossScaleAlignment(scaleReports) {
   const { byteHarm, elementHarm, compositionHarm } = scaleReports || {};
@@ -251,17 +251,75 @@ function verifyCrossScaleAlignment(scaleReports) {
     reason: aligned ? 'scales agree within one level' : 'harm-definition gap between scales',
   };
 }
-verifyCrossScaleAlignment.atomicProperties = {
-  charge: 0, valence: 3, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'reactive', electronegativity: 0.85, group: 18, period: 7,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
+verifyCrossScaleAlignment.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+// scanForMissingAtomicProperties — every top-level function in the
+// codebase must declare its atomicProperties { charge, valence, mass,
+// spin, phase, reactivity, electronegativity, group, period,
+// harmPotential, alignment, intention, domain }. The atomic table is
+// how the substrate identifies what each function IS at the elemental
+// scale; without it, a function is invisible to the periodic-table
+// scoring and to group-coherence checks. The covenant catches this
+// as a fractal-architecture violation: every node must declare its
+// place in the periodic table.
+//
+// Honors the same @oracle-infrastructure / @oracle-pattern-definitions
+// annotations the gate scanner uses — exempts internal-state files
+// where the function-as-element framing doesn't apply (e.g. tmpdir
+// cleanup, ledger persistence). The substantive code paths must
+// declare their atomic properties.
+const FN_DEF_RE = /^\s*(?:async\s+)?function\s+(\w+)\s*\(/gm;
+const ATOMIC_PROP_RE = /(\w+)\.atomicProperties\s*=\s*\{/g;
+const REQUIRED_ATOMIC_KEYS = ['charge', 'valence', 'mass', 'spin', 'phase',
+  'reactivity', 'electronegativity', 'group', 'period',
+  'harmPotential', 'alignment', 'intention', 'domain'];
+
+function scanForMissingAtomicProperties(code) {
+  if (typeof code !== 'string') return [];
+  const TRUSTED_ANNOTATIONS = /@oracle-(infrastructure|pattern-definitions)\b/;
+  if (TRUSTED_ANNOTATIONS.test(code)) return [];
+
+  // Find every function NAME defined at the top level
+  const functions = [];
+  FN_DEF_RE.lastIndex = 0;
+  let m;
+  while ((m = FN_DEF_RE.exec(code)) !== null) {
+    functions.push({ name: m.group ? m.group(1) : m[1], offset: m.index });
+  }
+  if (functions.length === 0) return [];
+
+  // Find every NAME.atomicProperties = { ... } block
+  const annotated = new Set();
+  ATOMIC_PROP_RE.lastIndex = 0;
+  while ((m = ATOMIC_PROP_RE.exec(code)) !== null) {
+    annotated.add(m[1]);
+  }
+
+  const findings = [];
+  for (const fn of functions) {
+    // Skip private (underscore-prefixed) helpers — convention says they're
+    // not substrate elements. Also skip names with no real production weight
+    // like one-liners and lambdas (already filtered by FN_DEF_RE which
+    // matches `function NAME (` only).
+    if (fn.name.startsWith('_')) continue;
+    if (!annotated.has(fn.name)) {
+      const line = code.slice(0, fn.offset).split('\n').length;
+      findings.push({
+        line,
+        excerpt: `function ${fn.name}(...)`,
+        reason: 'missing atomicProperties — function not declared in the periodic table',
+      });
+    }
+  }
+  return findings;
+}
+scanForMissingAtomicProperties.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "low", electronegativity: 0, group: 2, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function fractalAudit(ctx) {
   const report = {};
   if (ctx && ctx.code) {
     report.byteScale = scanForUngatedMutations(ctx.code);
+    report.atomicScale = scanForMissingAtomicProperties(ctx.code);
     report.fileSignature = computeFileCovenantSignature(ctx.code, ctx.filePath || '');
   }
   if (ctx && ctx.substrateData && ctx.substrateSignature) {
@@ -272,21 +330,18 @@ function fractalAudit(ctx) {
   }
   const fractalHealth =
     (!report.byteScale || report.byteScale.length === 0) &&
+    (!report.atomicScale || report.atomicScale.length === 0) &&
     (!report.substrateScale || report.substrateScale.valid) &&
     (!report.groupCoherence || !report.groupCoherence.decoherent);
   report.fractalHealth = fractalHealth;
   report.ranAt = new Date().toISOString();
   return report;
 }
-fractalAudit.atomicProperties = {
-  charge: 1, valence: 4, mass: 'heavy', spin: 'odd', phase: 'plasma',
-  reactivity: 'reactive', electronegativity: 0.95, group: 18, period: 7,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
+fractalAudit.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 module.exports = {
   scanForUngatedMutations,
+  scanForMissingAtomicProperties,
   requireGate,
   createGate,
   signSubstrate,

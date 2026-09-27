@@ -236,36 +236,6 @@ function seedProductionLibrary4(oracle, options) {
   return { registered: registered, skipped: skipped, failed: failed, total: seeds.length };
 }
 
-/**
- * Seed the curated starter pack — the best cross-language patterns
- * for immediate value. This is the recommended first seed for new users.
- */
-function seedCuratedLibrary(oracle, options = {}) {
-  const seeds = getCuratedSeeds();
-  const existing = oracle.patterns.getAll();
-  const existingNames = new Set(existing.map(p => p.name));
-
-  let registered = 0, skipped = 0, failed = 0;
-
-  for (const seed of seeds) {
-    if (existingNames.has(seed.name)) {
-      skipped++;
-      continue;
-    }
-
-    const result = oracle.registerPattern(seed);
-    if (result.registered) {
-      registered++;
-      if (options.verbose) console.log(`  [OK] ${seed.name} (${seed.language})`);
-    } else {
-      failed++;
-      if (options.verbose) console.log(`  [FAIL] ${seed.name}: ${result.reason}`);
-    }
-  }
-
-  return { registered, skipped, failed, total: seeds.length };
-}
-
 module.exports = {
   // Data accessors
   getSeeds,
@@ -284,7 +254,6 @@ module.exports = {
   seedExtendedLibrary,
   seedProductionLibrary3,
   seedProductionLibrary4,
-  seedCuratedLibrary,
 };
 
 // ─── Backward-compatible named exports (must come AFTER module.exports assignment) ───
@@ -295,3 +264,23 @@ Object.defineProperty(module.exports, 'PYTHON_SEEDS', { get: getPythonSeeds, enu
 Object.defineProperty(module.exports, 'GO_SEEDS', { get: getGoSeeds, enumerable: true });
 Object.defineProperty(module.exports, 'RUST_SEEDS', { get: getRustSeeds, enumerable: true });
 Object.defineProperty(module.exports, 'CURATED_SEEDS', { get: getCuratedSeeds, enumerable: true });
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+loadJSON.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getSeeds.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getExtendedSeeds.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getProductionSeeds.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getProductionSeeds2.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getProductionSeeds3.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getProductionSeeds4.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getPythonSeeds.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getGoSeeds.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getRustSeeds.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getCuratedSeeds.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+seedLibrary.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+seedNativeLibrary.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+seedExtendedLibrary.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+seedProductionLibrary3.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+seedProductionLibrary4.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

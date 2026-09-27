@@ -1,4 +1,5 @@
 'use strict';
+const { rmFixture } = require('./helpers');
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
@@ -196,6 +197,6 @@ describe('audit-medium #15 — audit logger', () => {
   // Cleanup
   it('cleanup temp dir', () => {
     _resetAuditLog();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 });

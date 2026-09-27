@@ -1,3 +1,13 @@
+const { rmFixture } = require('./helpers');
+/**
+ *
+ * This suite clears its own throwaway table between cases
+ * (`DELETE FROM pattern_archive` with no WHERE), which is exactly the shape
+ * P4 blocks. That is a true positive, not a rule bug: the statement really is
+ * unscoped. It is exempt because the store is a temp directory created and
+ * destroyed by this file, so "stored data must remain whole" has nothing to
+ * protect here.
+ */
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
@@ -16,7 +26,7 @@ describe('Retention Policy', () => {
 
   after(() => {
     store.close();
-    fs.rmSync(testDir, { recursive: true, force: true });
+    rmFixture(testDir, { recursive: true, force: true });
   });
 
   describe('purgeCandidateArchive', () => {

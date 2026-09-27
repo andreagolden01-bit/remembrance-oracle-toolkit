@@ -86,8 +86,13 @@ function _autocorrPeak(w) {
       bestLag = lag;
     }
   }
-  return { lag: bestLag, ratio: bestRatio };
+  const __retVal = { lag: bestLag, ratio: bestRatio };
+  // field contribution removed: contributed ratio (via __retVal), not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
+_autocorrPeak.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _trendStrength(w) {
   const n = w.length;
@@ -112,6 +117,7 @@ function _trendStrength(w) {
   const r2 = ssTot > 0 ? 1 - ssRes / ssTot : 0;
   return { slope, intercept, r2 };
 }
+_trendStrength.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Internal: single-pass classification returning both the bucket and a
@@ -140,19 +146,10 @@ function _classifyWithStrength(w) {
   }
   return { label: 'unknown', strength: 0 };
 }
+_classifyWithStrength.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function classifyWaveform(w) {
   return _classifyWithStrength(w).label;
-}
-
-/**
- * Return a [0, 1] score for how confidently ``w`` fits its classifier
- * bucket. Feeds into projectionConfidence so a weakly-classified signal
- * (e.g. a trend at r²=0.86 — barely above threshold) earns less pull
- * than a strongly-classified one (r²=0.99).
- */
-function classificationStrength(w) {
-  return _classifyWithStrength(w).strength;
 }
 
 // ─── Future projection ──────────────────────────────────────────
@@ -299,7 +296,7 @@ module.exports = {
   cadenceToMs,
   isTimeAligned,
   classifyWaveform,
-  classificationStrength,
+
   projectForward,
   projectionConfidence,
   gateProjection,
@@ -307,27 +304,16 @@ module.exports = {
   computeRetrocausalAlignment,
 };
 
-computeRetrocausalAlignment.atomicProperties = {
-  charge: 1, valence: 0, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'oracle',
-};
-projectForward.atomicProperties = {
-  charge: 1, valence: 0, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'healing', intention: 'neutral',
-  domain: 'oracle',
-};
-classifyWaveform.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 1, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-classificationStrength.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 1, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
+computeRetrocausalAlignment.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+projectForward.atomicProperties = { charge: -1, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+classifyWaveform.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+parseTimestamp.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+cadenceToMs.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+isTimeAligned.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+projectionConfidence.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+gateProjection.atomicProperties = { charge: -1, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+pearson.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

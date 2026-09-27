@@ -1,4 +1,5 @@
 'use strict';
+const { rmFixture } = require('./helpers');
 
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -18,7 +19,7 @@ describe('Provenance Tracking', () => {
 
   afterEach(() => {
     process.chdir(origCwd);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('generateProvenance returns a watermark object', () => {

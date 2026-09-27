@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * FractalStore — Storage middleware that wraps SQLiteStore with automatic
@@ -45,6 +46,7 @@ function _loadCompression() {
     }
   }
 }
+_loadCompression.atomicProperties = { charge: 0, valence: 3, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 1, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 class FractalStore {
   /**
@@ -147,7 +149,7 @@ class FractalStore {
       this._sqlite.db.exec('RELEASE remove_pattern');
       return true;
     } catch (e) {
-      try { this._sqlite.db.exec('ROLLBACK TO remove_pattern'); } catch (_) {}
+      try { this._sqlite.db.exec('ROLLBACK TO remove_pattern'); } catch (_) { quiet('store:fractal-store:constructor', _);}
       throw e;
     }
   }

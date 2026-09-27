@@ -13,7 +13,7 @@ const {
 } = require('../src/patterns/clustering');
 
 // Test pattern factories
-function makeTestPattern(overrides = {}) {
+const makeTestPattern = (overrides = {}) => {
   return {
     id: overrides.id || `p-${Math.random().toString(36).slice(2, 8)}`,
     name: overrides.name || 'test-pattern',
@@ -24,7 +24,7 @@ function makeTestPattern(overrides = {}) {
     structuredDescription: overrides.structuredDescription || undefined,
     coherencyScore: overrides.coherencyScore || { total: 0.85 },
   };
-}
+};
 
 describe('Similarity Clustering', () => {
   describe('codeSimilarity', () => {

@@ -1,4 +1,5 @@
 'use strict';
+const { rmFixture } = require('./helpers');
 
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
@@ -31,7 +32,7 @@ describe('SelfImprovementEngine', () => {
       }
     }
   });
-  afterEach(() => { fs.rmSync(tmpDir, { recursive: true, force: true }); });
+  afterEach(() => { rmFixture(tmpDir, { recursive: true, force: true }); });
 
   it('returns supervised mode below 0.85 coherency', () => {
     assert.equal(engine.getApprovalMode(0.76), 'supervised');
@@ -96,7 +97,9 @@ describe('SelfImprovementEngine', () => {
     // Some proposals that pass all gates should be auto-incorporated
     const autoInc = result.proposals.filter(p => p.status === 'auto-incorporated');
     if (autoInc.length > 0) {
-      assert.equal(autoInc[0].decidedBy, 'system');
+      // decidedBy starts with 'system' — may be 'system', 'system+ecosystem', etc.
+      // when the ecosystem cross-check also concurred.
+      assert.match(autoInc[0].decidedBy, /^system/);
     }
   });
 

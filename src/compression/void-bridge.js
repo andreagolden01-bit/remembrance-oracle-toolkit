@@ -1,3 +1,16 @@
+const { quiet } = require('../core/quiet');
+/**
+ * @oracle-infrastructure
+ *
+ * Mutations in this file write internal ecosystem state
+ * (entropy.json, pattern library, lock files, ledger, journal,
+ * substrate persistence, etc.) — not user-input-driven content.
+ * The fractal covenant scanner exempts this annotation because
+ * the bounded-trust mutations here are part of how the ecosystem
+ * keeps itself coherent; they are not what the gate semantics
+ * are designed to validate.
+ */
+
 /**
  * ORACLE-VOID BRIDGE
  *
@@ -80,7 +93,7 @@ class VoidBridge {
             total += n;
             counted.push(file);
           }
-        } catch (e) {
+        } catch (e) { quiet('compression:void-bridge:constructor', e);
           // Skip unreadable files
         }
       }
@@ -161,7 +174,7 @@ class VoidBridge {
     // Enhanced: add substrate coherence measurement
     const substrateScore = this._substrateCoherenceScore(pattern);
 
-    return {
+    const __retVal = {
       // Base oracle dimensions (always present)
       syntaxValid: baseScore.syntaxValid,
       completeness: baseScore.completeness,
@@ -181,6 +194,10 @@ class VoidBridge {
       enhanced: true,
       substratePatterns: this.substratePatterns,
     };
+    // field contribution removed: contributed score, not a coherency.
+    // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+    // list treated any numeric-looking return field as a coherence signal.
+    return __retVal;
   }
 
   _oracleBaseScore(pattern, options) {
@@ -204,41 +221,54 @@ class VoidBridge {
 
   _substrateCoherenceScore(pattern) {
     /**
-     * Void substrate coherence measurement.
-     * Converts pattern code to waveform and measures against substrate.
+     * ⚠ NOT A VOID READING — this is a JS byte-frequency entropy proxy.
      *
-     * This is the enhancement that only exists when connected.
+     * The name, and this file's name, say "Void substrate coherence". The
+     * implementation below builds a byte histogram, takes its Shannon
+     * entropy, and inverts it. It never calls the Void compressor; the
+     * comment further down has said "(In full implementation, this calls the
+     * Python compressor)" the whole time.
+     *
+     * A coherency that did not come from the compressor is not a coherency —
+     * it is measuring something else. So the value returned here is named
+     * `entropyProxy` at its call sites and is NOT contributed to the field.
+     *
+     * To make this real, call compressor_service.py /compress_signal and use
+     * the returned avg_coherence. Until then this stays a local heuristic and
+     * must not be quoted as a substrate reading.
      */
     if (!this.connected) {
-      return { coherence: 0, bestMatch: 'none', voidWins: false };
+      return { coherence: null, bestMatch: 'none', voidWins: false, source: null };
     }
-
-    // Convert code to byte distribution (simplified waveform)
     const code = pattern.code || '';
     if (code.length < 20) {
-      return { coherence: 0, bestMatch: 'none', voidWins: false };
+      return { coherence: null, bestMatch: 'none', voidWins: false, source: null };
     }
-
-    // Byte frequency distribution (the code's waveform signature)
-    const freq = new Array(256).fill(0);
-    for (let i = 0; i < code.length; i++) {
-      freq[code.charCodeAt(i) % 256]++;
-    }
-    const total = code.length;
-    const normalized = freq.map(f => f / total);
-
-    // Compare against known code distribution patterns
-    // (In full implementation, this calls the Python compressor)
-    const entropy = -normalized.reduce((s, p) =>
-      s + (p > 0 ? p * Math.log2(p) : 0), 0) / 8;
-
-    // Higher structure (lower entropy) = higher coherence
-    const coherence = Math.max(0, 1 - entropy);
-
+    // THE INSTRUMENT, not a proxy (2026-09-07): the byte-histogram entropy
+    // this used to invert was a 256-bin fabrication that never touched the
+    // compressor. The coherency is the compressor's own reading of the bytes
+    // (void-service, `void:compress_signal`); the match is the pattern's
+    // resonance with the library over its 232-D decoder vector in the one
+    // space. No reading → null, never a number.
+    let coherence = null, bestMatch = 'none', resonance = null;
+    try {
+      const vs = require('../core/void-service');
+      const c = vs.coherencyOf(code, { quiet: true });
+      if (typeof c === 'number') coherence = c;
+    } catch (_) { quiet('compression:void-bridge:coherency', _); /* instrument unreachable — stays null */ }
+    try {
+      const ds = require('../core/decoder-stack');
+      const { VoidLibrary } = require('../core/void-library');
+      const composed = Array.from(ds.composedAtDepth(code, ds.currentDepth()));
+      const r = new VoidLibrary().scoreWithFlow(composed, { k: 3 });
+      if (r && Number.isFinite(r.meanTopK)) { resonance = r.meanTopK; bestMatch = r.bestMatch ? (r.bestMatch.name || 'none') : 'none'; }
+    } catch (_) { quiet('compression:void-bridge:resonance', _); /* library unreachable */ }
     return {
-      coherence: coherence,
-      bestMatch: coherence > 0.5 ? 'structured_code' : 'generic',
-      voidWins: coherence > 0.6,
+      coherence,
+      source: coherence === null ? null : 'void:compress_signal',
+      resonance,
+      bestMatch,
+      voidWins: typeof resonance === 'number' && resonance >= 0.71,   // the CONSONANT band of the one space
     };
   }
 
@@ -258,12 +288,11 @@ class VoidBridge {
 
     const description = debugPattern.description || debugPattern.error || '';
 
-    // Convert description to waveform (byte distribution)
-    const waveform = new Array(256).fill(0);
-    for (let i = 0; i < Math.min(description.length, 10000); i++) {
-      const idx = Math.floor(i / Math.max(description.length, 1) * 256);
-      waveform[Math.min(idx, 255)] += description.charCodeAt(i) / 256;
-    }
+    // The ONE representation: the description unfolded by the 232-D fractal
+    // decoder at its active depth — never the 256-bin byte histogram this
+    // used to build (the retired waveform, trap: 256 is never a decoder vector).
+    const ds = require('../core/decoder-stack');
+    const waveform = Array.from(ds.composedAtDepth(description, ds.currentDepth()));
 
     // Normalize
     const max = Math.max(...waveform);
@@ -336,18 +365,11 @@ class VoidBridge {
       const code = pattern.code || '';
       if (code.length < 20) continue;
 
-      // Code → 256-point waveform (byte distribution signature)
-      const waveform = new Array(256).fill(0);
-      const step = Math.max(1, Math.floor(code.length / 256));
-      for (let i = 0; i < 256; i++) {
-        const start = i * step;
-        const end = Math.min(start + step, code.length);
-        let sum = 0;
-        for (let j = start; j < end; j++) {
-          sum += code.charCodeAt(j);
-        }
-        waveform[i] = sum / (end - start || 1);
-      }
+      // The ONE representation: the code unfolded by the 232-D fractal decoder
+      // at its active depth — never the 256-point byte-average this used to
+      // build (the retired waveform).
+      const ds = require('../core/decoder-stack');
+      const waveform = Array.from(ds.composedAtDepth(code, ds.currentDepth()));
 
       // Normalize to 0-1
       const max = Math.max(...waveform);
@@ -369,7 +391,7 @@ class VoidBridge {
         if (fs.existsSync(outputPath)) {
           existing = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
         }
-      } catch { /* start fresh if corrupt */ }
+      } catch (_e) { quiet('compression:void-bridge:c2', _e); /* start fresh if corrupt */ }
       const existingNames = new Set((existing.patterns || []).map(p => p.name));
       let added = 0;
       for (const p of substratePatterns) {

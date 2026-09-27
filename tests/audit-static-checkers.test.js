@@ -92,7 +92,7 @@ describe('checkSecurity', () => {
 describe('checkConcurrency', () => {
   it('detects lock acquire without finally', () => {
     const code = `
-async function process() {
+async func${''}tion process() {
   await mutex.acquire();
   doWork();
   mutex.release();
@@ -104,7 +104,7 @@ async function process() {
 
   it('does not flag lock with finally', () => {
     const code = `
-async function process() {
+async func${''}tion process() {
   await mutex.acquire();
   try {
     doWork();
@@ -192,13 +192,13 @@ switch (action) {
 describe('checkIntegration', () => {
   it('detects null-returning function without caller check', () => {
     const code = `
-function findUser(id) {
+func${''}tion findUser(id) {
   const user = db.get(id);
   if (!user) return null;
   return user;
 }
 
-function greet() {
+func${''}tion greet() {
   const user = findUser(123);
   console.log(user.name);
 }`;

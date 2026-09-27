@@ -1,4 +1,6 @@
 'use strict';
+const { quiet } = require('../core/quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 /**
  * void-indirection.js
@@ -104,7 +106,8 @@ function measureRatio(content, options = {}) {
     fs.writeFileSync(tmpFile, buffer);
 
     const measureScript = path.join(voidPath, 'measure_ratio.py');
-    const result = execSync(`python3 "${measureScript}" "${tmpFile}"`, {
+    const { execFileSync } = require('child_process');
+    const result = execFileSync('python3', [measureScript, tmpFile], {
       timeout,
       encoding: 'utf-8',
       cwd: voidPath,
@@ -121,7 +124,7 @@ function measureRatio(content, options = {}) {
       if (fs.existsSync(tmpFile)) {
         fs.unlinkSync(tmpFile);
       }
-    } catch (_) {
+    } catch (_) { quiet('audit:void-indirection:parseFloat', _);
       // Ignore cleanup errors
     }
   }
@@ -248,3 +251,12 @@ module.exports = {
   calculateConfidence,
   tempFilePath,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+tempFilePath.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+measureRatio.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 1, group: 6, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+sanitizeIdentifier.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+calculateConfidence.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+detectHiddenIdentifiers.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };

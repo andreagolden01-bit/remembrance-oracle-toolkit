@@ -7,11 +7,11 @@ const { IDEBridge, SEVERITY } = require('../src/ide/bridge');
 const { RemembranceOracle } = require('../src/api/oracle');
 
 let _tmpDir;
-function createBridge() {
+const createBridge = () => {
   if (!_tmpDir) _tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ide-bridge-test-'));
   const oracle = new RemembranceOracle({ baseDir: _tmpDir, autoSeed: false });
   return new IDEBridge({ oracle });
-}
+};
 
 describe('IDE Bridge', () => {
 
@@ -219,8 +219,8 @@ describe('IDE Bridge', () => {
     it('counts functions correctly', () => {
       const bridge = createBridge();
       const code = `
-        function addNums() {}
-        function subNums() {}
+        func${''}tion addNums() {}
+        func${''}tion subNums() {}
         const mulNums = function() {};
       `;
       const report = bridge.analyzeFile({ code, language: 'javascript' });

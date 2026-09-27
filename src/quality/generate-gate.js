@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * oracle generate <plan> — stage 2 of the anti-hallucination generation
@@ -124,7 +125,7 @@ function checkAgainstPlan(args) {
   try {
     const { registerGateSignal } = require('../unified/emergent-coherency');
     registerGateSignal(violations.length, calls.length);
-  } catch { /* emergent module not available */ }
+  } catch (_e) { quiet('quality:generate-gate:registerGateSignal', _e); /* emergent module not available */ }
 
   return {
     ok: violations.length === 0,
@@ -163,9 +164,9 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-checkAgainstPlan.atomicProperties = {
-  charge: 1, valence: 1, mass: 'medium', spin: 'odd', phase: 'liquid',
-  reactivity: 'medium', electronegativity: 1, group: 13, period: 4,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
+checkAgainstPlan.atomicProperties = { charge: 1, valence: 1, mass: "medium", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 1, group: 13, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+emptyResult.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

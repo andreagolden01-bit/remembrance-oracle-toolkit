@@ -19,7 +19,7 @@ const { createTestOracle, cleanTempDir } = require('./helpers');
 
 // ─── Mock Stores ─────────────────────────────────────────────────────────
 
-function createMockStore(overrides = {}) {
+const createMockStore = (overrides = {}) => {
   const deltas = overrides.deltas || {};
   const templates = overrides.templates || {};
   const embeddings = overrides.embeddings || {};
@@ -34,7 +34,7 @@ function createMockStore(overrides = {}) {
     getAllHoloEmbeddings: () => Object.entries(embeddings).map(([k, v]) => ({ patternId: k, embeddingVec: v.embeddingVec })),
     getAllPatterns: () => overrides.patterns || [],
   };
-}
+};
 
 describe('Fractal-Library Bridge', () => {
   describe('holoDecisionBoost', () => {

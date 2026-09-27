@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * SERF × Compression Integration
  *
@@ -173,6 +174,7 @@ function _extractBestStrategy(result) {
 
   return bestStrategy;
 }
+_extractBestStrategy.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── 3. SERF dimensions for holographic embeddings ───
 
@@ -193,7 +195,12 @@ function serfDimensions(code, language) {
   }
 
   const obs = observeCoherence(code, { language });
-  return { ...obs.dimensions, composite: obs.composite };
+  const __retVal = { ...obs.dimensions, composite: obs.composite };
+  // ── LRE field-coupling (main return path; was buried in !code guard) ──
+  // field contribution removed: contributed composite (via __retVal), not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
 
 /**
@@ -296,7 +303,7 @@ function validateAllReconstructions(store) {
 
       // Persist validation result if store supports it
       if (typeof store.storeValidationResult === 'function') {
-        try { store.storeValidationResult(result); } catch (_) { /* non-fatal */ }
+        try { store.storeValidationResult(result); } catch (_) { quiet('compression:serf-integration:validateReconstruction', _); /* non-fatal */ }
       }
 
       if (result.valid) {
@@ -323,3 +330,14 @@ module.exports = {
   validateReconstruction,
   validateAllReconstructions,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+prioritizeForCompression.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 2, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+partitionByReadiness.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+healFamily.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 10, period: 4, harmPotential: "dangerous", alignment: "healing", intention: "neutral", domain: "utility" };
+serfDimensions.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+serfEmbeddingDims.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+validateReconstruction.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+validateAllReconstructions.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

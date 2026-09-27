@@ -10,6 +10,10 @@ import { getLeadById } from "@/app/lib/database";
 import { scoreLead } from "@/app/lib/lead-scoring";
 import { getLeadPrice, PURCHASE_TIERS, getTierByIndex } from "@/app/lib/lead-depreciation";
 import { stripe } from "@/app/lib/stripe";
+import { validateCsrfToken } from "@/app/lib/csrf";
+import { logger } from "@/app/lib/logger";
+import { getAcknowledgement, isSuppressed, recordAudit } from "@/app/lib/compliance";
+import { getLeadOperations } from "@/app/lib/lead-operations";
 
 /**
  * Client Purchase API
@@ -23,6 +27,13 @@ import { stripe } from "@/app/lib/stripe";
 export async function POST(req: NextRequest) {
   const auth = await verifyClient(req);
   if (auth instanceof NextResponse) return auth;
+
+  if (!validateCsrfToken(req)) {
+    return NextResponse.json(
+      { success: false, message: "Security validation failed. Please refresh the page and try again." },
+      { status: 403 }
+    );
+  }
 
   try {
     const body = await req.json();
@@ -48,6 +59,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Lead not found." }, { status: 404 });
     }
     const lead = leadResult.value;
+
+    const [acknowledgement, operations, suppressed] = await Promise.all([
+      getAcknowledgement(auth.clientId), getLeadOperations(leadId, { admin: true }), isSuppressed(lead.phone, lead.email),
+    ]);
+    if (!acknowledgement?.active) return NextResponse.json({ success:false, message:"Complete your compliance acknowledgement before purchasing leads." },{status:403});
+    if (operations.doNotContact) return NextResponse.json({ success:false, message:"This lead cannot be purchased because it is marked Do Not Contact." },{status:409});
+    if (suppressed || !lead.consentTcpa || !lead.consentPrivacy || !lead.consentTimestamp || !lead.consentText) return NextResponse.json({ success:false, message:"This lead is no longer available." },{status:409});
+    let licensedStates: string[] = [];
+    try { licensedStates = JSON.parse(client.stateLicenses || "[]"); } catch { licensedStates = []; }
+    if (licensedStates.length && !licensedStates.includes(lead.state)) return NextResponse.json({ success:false, message:"Your account is not currently eligible to purchase leads in this state." },{status:403});
 
     // Score check
     const score = scoreLead(lead);
@@ -90,9 +111,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Monthly purchase cap reached." }, { status: 429 });
     }
 
-    // Price calculation — tier base price with time-based depreciation
+    // Price calculation — tier base price, time-depreciated, then scaled by the
+    // lead's coherency grade (score.total is coherency×100, so /100 recovers it).
     const isExclusive = selectedTierIndex === 0;
-    const { price } = getLeadPrice(lead.createdAt, selectedTier.name);
+    const { price } = getLeadPrice(lead.createdAt, selectedTier.name, score.total / 100);
 
     // Create Stripe Checkout Session
     const origin = req.headers.get("origin") || req.headers.get("host") || "";
@@ -119,17 +141,47 @@ export async function POST(req: NextRequest) {
         leadId,
         exclusive: isExclusive ? "true" : "false",
         tierName: selectedTier.name,
+        maxBuyers: String(selectedTier.maxBuyers),
         price: String(price),
       },
-      success_url: `${baseUrl}/portal?tab=purchases&payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/portal?tab=leads&payment=cancelled`,
+      success_url: `${baseUrl}/portal/marketplace?tab=purchases&payment=success&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/portal/marketplace?tab=leads&payment=cancelled`,
     });
+    await recordAudit({ actorId:auth.clientId,actorRole:"agent",eventType:"purchase_checkout_started",targetType:"lead",targetId:leadId,summary:"Lead purchase checkout started",ip:req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||null,userAgent:req.headers.get("user-agent") });
 
     return NextResponse.json({
       success: true,
       checkoutUrl: session.url,
     });
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+
+    // Missing key — clearer 503 than a generic 400 so the operator knows it's
+    // an env-var problem, not a client mistake.
+    if (message.includes("STRIPE_SECRET_KEY is not set")) {
+      logger.error("Stripe not configured — purchase request rejected", { detail: message });
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Payments are temporarily unavailable. Our team has been notified — please try again shortly.",
+        },
+        { status: 503 },
+      );
+    }
+
+    // Stripe accepted the request but returned an API error — surface the
+    // Stripe-side message to the operator log and a generic 502 to the buyer
+    // (don't leak Stripe internals to the client).
+    if (message.includes("StripeInvalidRequestError") || (err as { type?: string })?.type?.startsWith?.("Stripe")) {
+      logger.error("Stripe API error during checkout session create", { detail: message });
+      return NextResponse.json(
+        { success: false, message: "We couldn't open the payment page. Please try again." },
+        { status: 502 },
+      );
+    }
+
+    // Genuinely malformed body / unknown failure — preserve the original 400.
+    logger.warn("Purchase request rejected", { detail: message });
     return NextResponse.json({ success: false, message: "Invalid request." }, { status: 400 });
   }
 }

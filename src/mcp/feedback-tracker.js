@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * MCP Feedback Tracker — auto-infers feedback from tool usage patterns.
@@ -35,7 +36,7 @@ function inferFeedbackFromActivity(oracle) {
       try {
         oracle.feedback(id, true); // infer success
         inferred.push({ id, name: info.name, decision: info.decision });
-      } catch (e) { /* non-fatal */ }
+      } catch (e) { quiet('mcp:feedback-tracker:inferFeedbackFromActivity', e); /* non-fatal */ }
     }
   }
   _pendingPulls.clear();
@@ -62,6 +63,7 @@ function getPendingPulls() {
 function _reset() {
   _pendingPulls.clear();
 }
+_reset.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   trackPull,
@@ -70,3 +72,11 @@ module.exports = {
   getPendingPulls,
   _reset,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+trackPull.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+inferFeedbackFromActivity.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+clearPendingPull.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+getPendingPulls.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

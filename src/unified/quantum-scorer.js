@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Unified Quantum Scorer — single measurement that fuses Quantum, Fractal, and Audit.
@@ -118,7 +119,7 @@ const FRACTAL_SECTOR_MAP = {
  */
 function unifiedMeasurement(code, options = {}) {
   if (!code || typeof code !== 'string') {
-    return {
+    const __retVal = {
       amplitude: PLANCK_AMPLITUDE,
       confidence: 0,
       decision: 'generate',
@@ -128,6 +129,19 @@ function unifiedMeasurement(code, options = {}) {
       quantum: { state: QUANTUM_STATES.SUPERPOSITION, sector: null, sectorWeight: 0.8 },
       unified: true,
     };
+    // ── LRE field-coupling (auto-wired) ──
+    try {
+      const __lre_p1 = '../core/field-coupling';
+      const __lre_p2 = require('path').join(__dirname, '../core/field-coupling');
+      for (const __p of [__lre_p1, __lre_p2]) {
+        try {
+          const { recordCost: __recordCost } = require(__p);
+          __recordCost({ units: 1, kind: 'work', source: 'oracle:quantum-scorer:unifiedMeasurement' });
+          break;
+        } catch (_) { quiet('unified:quantum-scorer:__recordCost', _); /* try next */ }
+      }
+    } catch (_) { quiet('unified:quantum-scorer:__recordCost', _); /* best-effort */ }
+    return __retVal;
   }
 
   const {
@@ -353,7 +367,7 @@ function quickAmplitude(code, options = {}) {
         auditPenalty += AUDIT_DECOHERENCE[w.bugClass] || 0.03;
       }
       auditPenalty = Math.min(0.4, auditPenalty);
-    } catch (_) { /* graceful */ }
+    } catch (_) { quiet('unified:quantum-scorer:_checkResolvedCode', _); /* graceful */ }
   }
 
   const base = computeAmplitude({
@@ -379,23 +393,8 @@ module.exports = {
 // These declarations make the oracle atomically coded native —
 // its structure IS its atomic description.
 
-unifiedMeasurement.atomicProperties = {
-  charge: 0, valence: 4, mass: 'heavy', spin: 'even', phase: 'gas',
-  reactivity: 'reactive', electronegativity: 0.9, group: 18, period: 7,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'oracle',
-};
+unifiedMeasurement.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 1, group: 9, period: 5, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-unifiedFieldMeasurement.atomicProperties = {
-  charge: 0, valence: 0, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-quickAmplitude.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
+unifiedFieldMeasurement.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+quickAmplitude.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };

@@ -49,7 +49,7 @@ function synthesizeWhisper(consensus, agentOutputs, task) {
   // Determine recommendation
   const recommendation = determineRecommendation(winner.score, agreement);
 
-  return {
+  const __retVal = {
     message,
     dimensions: dimensionInsights,
     agreement,
@@ -61,6 +61,11 @@ function synthesizeWhisper(consensus, agentOutputs, task) {
       dimensions: winner.dimensions,
     },
   };
+  // ── LRE field-coupling (main return path; was buried in !consensus.winner guard) ──
+  // field contribution removed: contributed agreement, not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
 
 /**
@@ -164,3 +169,12 @@ module.exports = {
   formatWhisper,
   determineRecommendation,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+synthesizeWhisper.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+buildNarrative.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+determineRecommendation.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+truncate.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+formatWhisper.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };

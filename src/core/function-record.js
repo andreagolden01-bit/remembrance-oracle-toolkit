@@ -43,37 +43,9 @@ function makeRecord(uri, {
 
 const _URI_RE = /coh:\/\/[a-z][a-z0-9_-]*\/[a-z][a-z0-9_-]*\/[A-Za-z0-9_./:\-]+(?:@[A-Za-z0-9_.\-]+)?(?:#h:[0-9a-f]{12})?/g;
 
-/**
- * Scan source code for explicit coh:// URI references in string literals
- * or comments. Returns deduplicated, sorted list. Mirrors the Python
- * detect_derived_from() so producers in either language emit the same
- * provenance graph for the same source text.
- */
-function detectDerivedFrom(source) {
-  if (!source) return [];
-  const found = new Set();
-  let m;
-  _URI_RE.lastIndex = 0;
-  while ((m = _URI_RE.exec(source)) !== null) found.add(m[0]);
-  return Array.from(found).sort();
-}
+module.exports = { SPEC_VERSION, makeRecord };
 
-function writeRecord(rec, rootDir = '.') {
-  const outDir = path.join(rootDir, RECORDS_DIR);
-  fs.mkdirSync(outDir, { recursive: true });
-  const fn = uriToFilename(rec.uri);
-  const fp = path.join(outDir, fn);
-  // Match Python's json.dump(indent=2, sort_keys=True) — sort top-level keys.
-  // Nested objects keep their natural order; deep sorting is reserved for
-  // when canonical hashing of records is needed (future work).
-  const sorted = Object.keys(rec).sort().reduce((o, k) => { o[k] = rec[k]; return o; }, {});
-  fs.writeFileSync(fp, JSON.stringify(sorted, null, 2));
-  return fp;
-}
-
-function readRecord(uri, rootDir = '.') {
-  const fp = path.join(rootDir, RECORDS_DIR, uriToFilename(uri));
-  return JSON.parse(fs.readFileSync(fp, 'utf8'));
-}
-
-module.exports = { SPEC_VERSION, makeRecord, writeRecord, readRecord, detectDerivedFrom };
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+makeRecord.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };

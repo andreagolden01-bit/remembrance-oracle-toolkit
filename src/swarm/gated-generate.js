@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Gated swarm code generation.
@@ -203,7 +204,7 @@ async function generateWithGate(generatorFn, description, options = {}) {
 
     history.push({ iteration: i + 1, draft, verification });
     if (typeof options.onIteration === 'function') {
-      try { options.onIteration(i + 1, verification); } catch { /* advisory */ }
+      try { options.onIteration(i + 1, verification); } catch (_e) { quiet('swarm:gated-generate:verifyDraft', _e); /* advisory */ }
     }
 
     if (verification.ok) {
@@ -241,15 +242,5 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-verifyDraft.atomicProperties = {
-  charge: 1, valence: 0, mass: 'heavy', spin: 'even', phase: 'liquid',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 4,
-  harmPotential: 'none', alignment: 'neutral', intention: 'benevolent',
-  domain: 'generation',
-};
-generateWithGate.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'generation',
-};
+verifyDraft.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 4, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };
+generateWithGate.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 9, period: 4, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };

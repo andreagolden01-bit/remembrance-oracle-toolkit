@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * AST-based static checkers — the replacement for the regex-based
@@ -28,7 +29,7 @@
 
 const { parseProgram, walkFunctions } = require('./parser');
 const { buildScope } = require('./scope');
-const { computeTainted, findSinkCalls } = require('./taint');
+const { computeTainted, findSinkCalls, collectRegexIdents } = require('./taint');
 const { inferNullability } = require('./type-inference');
 const { parseComments, isSuppressed } = require('./suppressions');
 
@@ -39,6 +40,7 @@ const BUG_CLASSES = {
   TYPE: 'type',
   INTEGRATION: 'integration',
   EDGE_CASE: 'edge-case',
+  SUBSTRATE_BYPASS: 'substrate-bypass',
 };
 
 const SEVERITY = { HIGH: 'high', MEDIUM: 'medium', LOW: 'low' };
@@ -96,6 +98,11 @@ function auditCode(source, options = {}) {
     : null;
   const isEnabled = (cls) => !enabled || enabled.has(cls);
 
+  // Which identifiers this file binds to a regex — read once, so the
+  // security checker can tell `SEAL.exec(s)` (RegExp) from `cp.exec(s)`
+  // (a shell) by the binding rather than by how the name is spelled.
+  const regexIdents = collectRegexIdents(source);
+
   // Walk every function and run per-function checkers
   walkFunctions(program, (fn) => {
     if (!fn.bodyTokens) return;
@@ -103,7 +110,7 @@ function auditCode(source, options = {}) {
     const tainted = computeTainted(fn);
 
     if (isEnabled(BUG_CLASSES.STATE_MUTATION)) checkStateMutation(fn, scope, emit);
-    if (isEnabled(BUG_CLASSES.SECURITY))       checkSecurityInFn(fn, tainted, emit);
+    if (isEnabled(BUG_CLASSES.SECURITY))       checkSecurityInFn(fn, tainted, emit, regexIdents);
     if (isEnabled(BUG_CLASSES.CONCURRENCY))    checkConcurrencyInFn(fn, emit);
     if (isEnabled(BUG_CLASSES.TYPE))           checkTypeInFn(fn, scope, emit);
     if (isEnabled(BUG_CLASSES.INTEGRATION))    checkIntegrationInFn(fn, nullability, scope, emit);
@@ -111,6 +118,12 @@ function auditCode(source, options = {}) {
 
   // File-level checks that don't need a function context
   if (isEnabled(BUG_CLASSES.EDGE_CASE)) checkEdgeCase(program, emit);
+  if (isEnabled(BUG_CLASSES.SUBSTRATE_BYPASS)) checkSubstrateBypass(source, emit, options.filePath);
+
+  // The ten standalone audit-pattern detectors, bridged into the engine
+  // (each was implemented and tested but never called — trap #24).
+  const { runPatternDetectors } = require('./pattern-detectors');
+  runPatternDetectors(source, emit, isEnabled, { advisoryPatterns: options.advisoryPatterns });
 
   // Sort by severity then line. Use an immutable copy so consumers
   // that captured the findings array earlier aren't surprised by
@@ -148,6 +161,29 @@ function buildSummary(findings) {
 // ─── State mutation checker ─────────────────────────────────────────────────
 
 /**
+ * True when `name` was declared `const|let <name> = [` in this token
+ * stream before `idx` and never reassigned afterwards — a function-local
+ * accumulator array the function owns outright. Sound: a later plain
+ * reassignment (`name = other`) voids the proof, because the identifier
+ * may now alias an array a caller can see.
+ */
+function declaredEmptyLocal(tokens, name, idx) {
+  let declared = false;
+  for (let i = 0; i < idx; i++) {
+    const t = tokens[i];
+    if (t?.type !== 'identifier' || t.value !== name) continue;
+    const prev = tokens[i - 1];
+    const isDecl = prev && (prev.value === 'const' || prev.value === 'let' || prev.value === 'var');
+    if (isDecl && tokens[i + 1]?.value === '=' && tokens[i + 2]?.value === '[' && tokens[i + 3]?.value === ']') {
+      declared = true;
+    } else if (!isDecl && tokens[i + 1]?.value === '=' && tokens[i + 2]?.value !== '=') {
+      declared = false; // reassigned to something we can't prove local
+    }
+  }
+  return declared;
+}
+
+/**
  * A .sort()/.reverse()/.splice() on a variable that wasn't produced by a
  * copy (slice, spread, Array.from, concat, structuredClone) is a mutation
  * of the source array. For private class fields (#name) we allow it —
@@ -177,7 +213,15 @@ function checkStateMutation(fn, scope, emit) {
     // Private field mutation is typically intentional
     const isPrivateField = receiverText.includes('this.#') || receiverText.includes('#');
 
-    if (!produced && !isPrivateField) {
+    // A local accumulator (`const xs = []` declared in THIS function and
+    // never reassigned) is owned by the function — sorting it in place
+    // is the canonical build-then-sort pattern, not a caller-visible
+    // mutation. Only a bare identifier qualifies: any member chain
+    // (this.xs, a.b) can alias external state.
+    const isLocalAccumulator = receiverRange.length === 1
+      && declaredEmptyLocal(tokens, receiverText, i);
+
+    if (!produced && !isPrivateField && !isLocalAccumulator) {
       emit({
         line: t.line,
         column: t.column,
@@ -248,7 +292,18 @@ function isProducedByCopy(receiverTokens) {
   return (
     text.includes('.slice(') ||
     text.includes('.concat(') ||
+    // map/filter/flat/flatMap provably return a FRESH array, so a
+    // .sort()/.reverse() chained onto their result mutates the throwaway
+    // intermediate, never a caller-owned array — e.g. a.map(...).sort()
+    // is the standard "decorate-sort-undecorate" idiom and is safe.
+    text.includes('.map(') ||
+    text.includes('.filter(') ||
+    text.includes('.flatMap(') ||
+    text.includes('.flat(') ||
     text.includes('Array.from(') ||
+    text.includes('Object.keys(') ||
+    text.includes('Object.values(') ||
+    text.includes('Object.entries(') ||
     text.includes('structuredClone(') ||
     /\[\.\.\./.test(text)
   );
@@ -256,8 +311,8 @@ function isProducedByCopy(receiverTokens) {
 
 // ─── Security checker ──────────────────────────────────────────────────────
 
-function checkSecurityInFn(fn, tainted, emit) {
-  findSinkCalls(fn, tainted, emit);
+function checkSecurityInFn(fn, tainted, emit, regexIdents) {
+  findSinkCalls(fn, tainted, emit, regexIdents);
 }
 
 // ─── Concurrency checker ───────────────────────────────────────────────────
@@ -382,6 +437,10 @@ function checkTypeInFn(fn, scope, emit) {
       // or the structural guard sees the check.
       if (scope.nonNullAt(i).has(divisorHead)) continue;
       if (hasDivisorGuardAround(tokens, i, divisorChain)) continue;
+      // Divisor assigned from `Math.max(<positive-literal>, …)` earlier in
+      // the function is provably ≥ that literal, hence non-zero — the
+      // standard "clamp a divisor to a floor" idiom (W = Math.max(2, …)).
+      if (divisorAssignedPositive(tokens, divisorHead, i)) continue;
       if (divisorChain !== divisorHead && hasDivisorGuardAround(tokens, i, divisorHead)) continue;
       emit({
         line: t.line, column: t.column,
@@ -411,6 +470,28 @@ function checkTypeInFn(fn, scope, emit) {
       suggestion: 'Wrap in try/catch or use a safeParse helper',
     });
   }
+}
+
+// True when `<divisor>` was assigned from `Math.max(<positive-number>, …)`
+// anywhere before `idx` in this token stream — which pins it at or above a
+// positive floor, so it can never be zero. Sound: a later plain
+// reassignment (`divisor = …` to something else) after such a clamp voids
+// the proof, so we take the LAST assignment before idx as authoritative.
+function divisorAssignedPositive(tokens, divisor, idx) {
+  let proven = false;
+  for (let i = 0; i < idx; i++) {
+    if (tokens[i]?.type !== 'identifier' || tokens[i].value !== divisor) continue;
+    if (tokens[i + 1]?.value !== '=' || tokens[i + 2]?.value === '=') continue; // assignment, not ==
+    // Pattern: divisor = Math . max ( <number > 0>
+    if (tokens[i + 2]?.value === 'Math' && tokens[i + 3]?.value === '.' &&
+        tokens[i + 4]?.value === 'max' && tokens[i + 5]?.value === '(' &&
+        tokens[i + 6]?.type === 'number' && parseFloat(tokens[i + 6].value) > 0) {
+      proven = true;
+    } else {
+      proven = false; // a different assignment supersedes the clamp
+    }
+  }
+  return proven;
 }
 
 function hasDivisorGuardAround(tokens, idx, divisor) {
@@ -469,12 +550,18 @@ function hasDivisorGuardAround(tokens, idx, divisor) {
     }
   }
   // Backward: early-exit guard clause
-  //   if (divisor === 0) return <whatever>;
-  //   if (divisor === 0) throw ...;
-  //   if (divisor === 0) continue;
+  //   if (divisor === 0) return <whatever>;      (exact-zero test)
+  //   if (divisor < 1e-6) return ...;            (epsilon threshold)
+  //   if (divisor <= 0) throw ...;               (non-positive test)
+  //   if (!divisor) continue;                    (truthiness)
   // When the guard's body is a terminator, the continuation (where our
-  // division lives) is guaranteed to have divisor !== 0.
-  for (let i = Math.max(0, idx - 40); i < idx; i++) {
+  // division lives) is guaranteed to have divisor !== 0 — UNLESS the
+  // divisor is reassigned between the guard and the division, which
+  // voids the proof (the reassigned value is unvetted). The window is
+  // 160 tokens: a guard is often separated from the division by a loop
+  // header + body, which alone exceeds the old 40-token window and made
+  // every early-return guard in the codebase read as unguarded.
+  for (let i = Math.max(0, idx - 160); i < idx; i++) {
     const t = tokens[i];
     if (t.type !== 'keyword' || t.value !== 'if') continue;
     if (tokens[i + 1]?.value !== '(') continue;
@@ -487,7 +574,17 @@ function hasDivisorGuardAround(tokens, idx, divisor) {
       if (tokens[j].type === 'identifier' && tokens[j].value === divisor) {
         const op = tokens[j + 1]?.value;
         const rhs = tokens[j + 2];
+        // Exact-zero test: `x === 0` / `x == 0`
         if ((op === '===' || op === '==') && rhs?.type === 'number' && parseFloat(rhs.value) === 0) {
+          matchedDivisor = true;
+        }
+        // Epsilon / non-positive threshold: `x < 1e-6`, `x < 0.001`,
+        // `x <= 0` — exiting when small-or-negative proves the
+        // continuation has x above the threshold (in particular, non-zero).
+        if (op === '<' && rhs?.type === 'number' && parseFloat(rhs.value) > 0) {
+          matchedDivisor = true;
+        }
+        if (op === '<=' && rhs?.type === 'number' && parseFloat(rhs.value) >= 0) {
           matchedDivisor = true;
         }
         if ((op === '!==' || op === '!=') && rhs?.type === 'number' && parseFloat(rhs.value) === 0) {
@@ -496,6 +593,10 @@ function hasDivisorGuardAround(tokens, idx, divisor) {
           // Skip — the primary non-null scope tracker handles block cases.
         }
       }
+      // Truthiness negation: `!x` anywhere in the condition
+      if (tokens[j].value === '!' && tokens[j + 1]?.type === 'identifier' && tokens[j + 1].value === divisor) {
+        matchedDivisor = true;
+      }
       j++;
     }
     if (!matchedDivisor) continue;
@@ -503,13 +604,22 @@ function hasDivisorGuardAround(tokens, idx, divisor) {
     // / continue) — possibly inside a `{ }` single-line block.
     const bodyStart = tokens[j + 1];
     if (!bodyStart) continue;
-    if (bodyStart.type === 'keyword' && (bodyStart.value === 'return' || bodyStart.value === 'throw' || bodyStart.value === 'continue' || bodyStart.value === 'break')) {
-      return true;
+    const isExit = (tok) => tok?.type === 'keyword' &&
+      (tok.value === 'return' || tok.value === 'throw' || tok.value === 'continue' || tok.value === 'break');
+    if (!isExit(bodyStart) && !(bodyStart.value === '{' && isExit(tokens[j + 2]))) continue;
+    // Soundness: the guard only holds if the divisor is NOT reassigned
+    // between the guard body and the division. `s = sqrt(s)` after
+    // `if (s < eps) return` re-binds the name to an unvetted value —
+    // the exact case that must stay flagged.
+    let reassigned = false;
+    for (let k = j; k < idx; k++) {
+      if (tokens[k]?.type !== 'identifier' || tokens[k].value !== divisor) continue;
+      const nx = tokens[k + 1]?.value;
+      if ((nx === '=' && tokens[k + 2]?.value !== '=') ||
+          nx === '+=' || nx === '-=' || nx === '*=' || nx === '/=' ||
+          nx === '++' || nx === '--') { reassigned = true; break; }
     }
-    if (bodyStart.value === '{' && tokens[j + 2]?.type === 'keyword' &&
-        (tokens[j + 2].value === 'return' || tokens[j + 2].value === 'throw' || tokens[j + 2].value === 'continue')) {
-      return true;
-    }
+    if (!reassigned) return true;
   }
   // Look backward for `if (divisor !== 0)` in the enclosing 30 tokens
   for (let i = Math.max(0, idx - 30); i < idx; i++) {
@@ -638,10 +748,24 @@ function findDereferences(tokens, startIdx, varName, window) {
 function hasInlineGuardBefore(tokens, idx, varName) {
   // Optional-chain access `varName?.x` is itself the guard
   if (tokens[idx + 1]?.value === '?.') return true;
-  // Ternary in last 8 tokens: `x ? x.y : z`
+  // Positive short-circuit / ternary in last 8 tokens: `x && x.y`, `x ? x.y : z`
   for (let j = idx - 1; j >= Math.max(0, idx - 8); j--) {
     if (tokens[j]?.value === '?' && tokens[j - 1]?.type === 'identifier' && tokens[j - 1].value === varName) return true;
     if (tokens[j]?.value === '&&' && tokens[j - 1]?.type === 'identifier' && tokens[j - 1].value === varName) return true;
+  }
+  // Negative short-circuit OR: `!x || x.y`, `x == null || x.y`, `x === null || x.y`.
+  // When the deref sits in the RIGHT operand of an `||` whose LEFT operand
+  // proves x is falsy/null, the deref only runs when x is truthy — the
+  // standard null-safe-access idiom. Scan back for the `||` and confirm
+  // its left side is a null-test of THIS var.
+  for (let j = idx - 1; j >= Math.max(0, idx - 12); j--) {
+    if (tokens[j]?.value !== '||') continue;
+    // `! x ||`  → tokens[j-1] = x, tokens[j-2] = '!'
+    if (tokens[j - 1]?.type === 'identifier' && tokens[j - 1].value === varName && tokens[j - 2]?.value === '!') return true;
+    // `x == null ||` / `x === null|undefined ||`
+    if (tokens[j - 3]?.type === 'identifier' && tokens[j - 3].value === varName &&
+        (tokens[j - 2]?.value === '==' || tokens[j - 2]?.value === '===') &&
+        (tokens[j - 1]?.value === 'null' || tokens[j - 1]?.value === 'undefined')) return true;
   }
   return false;
 }
@@ -702,12 +826,14 @@ function auditFile(filePath, options = {}) {
   }
   try {
     const source = fs.readFileSync(filePath, 'utf-8');
-    // Route through the process-level envelope cache so a second
-    // analysis of the same file (audit, lint, smell, prior in one
-    // session) hits the same parsed program.
-    const { analyzeCached } = require('../core/analyze');
-    const env = analyzeCached(source, filePath, { language: options.language });
-    const result = auditCode(source, { ...options, filePath, program: env.program });
+    // Route through the process-level program cache so a second analysis
+    // of the same file (audit, lint, smell, prior in one session) hits the
+    // same parsed program. This used to call core/analyze's envelope cache
+    // and read one field off it — but analyze builds its envelope by
+    // calling the checkers, so that made these modules require each other.
+    // The parse is the only shared thing, and it now lives in its own leaf.
+    const { programCached } = require('./program-cache');
+    const result = auditCode(source, { ...options, filePath, program: programCached(source, filePath) });
     return { file: filePath, ...result };
   } catch (e) {
     return { file: filePath, findings: [], summary: { total: 0, byClass: {}, bySeverity: {} }, error: e.message };
@@ -715,11 +841,21 @@ function auditFile(filePath, options = {}) {
 }
 
 function auditFiles(files, options = {}) {
+  // .oracle-ignore support — compiled glob matcher from suppressions.js,
+  // written and tested but never called until 2026-08-08 (wire-later
+  // ledger). Opt-in via options.repoRoot; a missing/empty ignore file
+  // matches nothing, so behavior without one is byte-identical.
+  let ignore = null;
+  if (options.repoRoot) {
+    try { ignore = require('./suppressions').loadIgnoreFile(options.repoRoot); }
+    catch (_) { ignore = null; }
+  }
   const results = [];
   let totalFindings = 0;
   const byClass = {};
   const bySeverity = {};
   for (const file of files || []) {
+    if (ignore && ignore.shouldIgnore && ignore.shouldIgnore(file)) continue;
     const r = auditFile(file, options);
     if (r.findings && r.findings.length > 0) {
       results.push(r);
@@ -728,6 +864,26 @@ function auditFiles(files, options = {}) {
       for (const [k, v] of Object.entries(r.summary.bySeverity)) bySeverity[k] = (bySeverity[k] || 0) + v;
     }
   }
+  // Contribute this audit run to the LivingRemembranceEngine field.
+  // cost = filesScanned (work units), coherence = 1 - weighted-severity
+  // where high counts as 1, medium 0.5, low 0.25. A clean run contributes
+  // coherence=1 (no findings = perfect alignment); a finding-heavy run
+  // drags the field toward higher entropy.
+  try {
+    const filesScanned = files ? files.length : 0;
+    const weighted = (bySeverity.high || 0) * 1.0 + (bySeverity.medium || 0) * 0.5 + (bySeverity.low || 0) * 0.25;
+    const severityScale = Math.max(1, filesScanned);
+    const coherence = Math.max(0, Math.min(1, 1 - (weighted / severityScale)));
+    const { contribute, recordCost } = require('../core/field-coupling');
+    contribute({
+      cost: Math.max(1, filesScanned),
+      coherence,
+      source: 'audit',
+    });
+    // entropy side: severity-weighted findings are disorder — route as cost.
+    if (weighted > 0) recordCost({ units: weighted, source: 'audit:findings', kind: 'disorder' });
+  } catch (_) { quiet('audit:ast-checkers:contribute', _); /* field unavailable — best-effort */ }
+
   return {
     files: results,
     totalFindings,
@@ -740,10 +896,82 @@ function auditFiles(files, options = {}) {
   };
 }
 
+// ─── Substrate-bypass checker ───────────────────────────────────────────────
+//
+// The failure mode this catches: reimplementing the substrate's own primitives
+// (cosine/resonance, nearest-neighbour retrieval, whitening) by hand instead of
+// calling them — which then gets benchmarked and mistaken for the substrate's
+// behaviour. Flags hand-rolled cosine loops and kNN linear scans and points to
+// the built path. The canonical implementations legitimately contain these, so
+// they are exempt; a deliberate naive baseline can be suppressed with the usual
+// goggles-disable comment.
+// The primitive tier — the substrate's OWN cosine/resonance/retrieval machinery. These files
+// ARE the thing other code is told to route through (composedCosine is the encoder's cosine;
+// the goggle is the measurement surface itself), so they cannot "route through the substrate"
+// — they are it. Consumers (sims, benchmarks) are still flagged.
+const _SUBSTRATE_PRIMITIVE_FILES = /core[\\/]whitening|compression[\\/]holographic|core[\\/]fractal-index|core[\\/]field-tool|core[\\/]decoder-stack|search[\\/]|scoring[\\/]pattern-resonance|waveform|tools[\\/]goggles|audit[\\/]ast-checkers/;
+function checkSubstrateBypass(source, emit, filePath) {
+  if (_SUBSTRATE_PRIMITIVE_FILES.test(String(filePath || ''))) return;
+  const lines = source.split('\n');
+  // (1) hand-rolled cosine similarity — the twin norm-accumulator fingerprint
+  const hasNa = /\bn(?:a|orm[aA])\s*\+=/.test(source);
+  const hasNb = /\bn(?:b|orm[bB])\s*\+=/.test(source);
+  if (hasNa && hasNb && /Math\.sqrt/.test(source)) {
+    let ln = lines.findIndex((l) => /\bn(?:a|orm[aA])\s*\+=/.test(l));
+    emit({
+      line: (ln < 0 ? 1 : ln + 1),
+      bugClass: BUG_CLASSES.SUBSTRATE_BYPASS, ruleId: 'substrate/handrolled-cosine',
+      assumption: 'a hand-written cosine/similarity loop',
+      reality: 'the substrate already computes resonance (whitening + holoSearch / fractal-index searchFlow)',
+      severity: SEVERITY.MEDIUM,
+      suggestion: 'Route through the substrate: whitening.applyWhitening + holoSearch / FractalIndex.searchFlow — measure THROUGH the system, not a hand-rolled scan.',
+    });
+  }
+  // (2) hand-rolled nearest-neighbour scan — sort-by-cosine then slice(0, k)
+  const knnLine = lines.findIndex((l) => /\.sort\([^;]*\bcos\w*\b[^;]*\)\s*\.slice\(\s*0\s*,/.test(l));
+  if (knnLine >= 0) {
+    emit({
+      line: knnLine + 1,
+      bugClass: BUG_CLASSES.SUBSTRATE_BYPASS, ruleId: 'substrate/handrolled-knn',
+      assumption: 'a hand-written nearest-neighbour scan (sort-by-cosine, O(N))',
+      reality: 'holoSearch addresses pages sub-linearly; FractalIndex.searchFlow is the built lean path (~5ms/10k)',
+      severity: SEVERITY.MEDIUM,
+      suggestion: 'Use holoSearch (sub-linear page addressing) or FractalIndex.searchFlow — do not reimplement retrieval beside the substrate.',
+    });
+  }
+}
+
 module.exports = {
   auditCode,
   auditFile,
   auditFiles,
+  checkSubstrateBypass,
   BUG_CLASSES,
   SEVERITY,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+auditCode.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "odd", phase: "solid", reactivity: "medium", electronegativity: 1, group: 14, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "malevolent", domain: "utility" };
+emptyResult.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+buildSummary.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+declaredEmptyLocal.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkStateMutation.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 4, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };
+readReceiverLeft.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+isProducedByCopy.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkSecurityInFn.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkConcurrencyInFn.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+hasFinallyRelease.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkTypeInFn.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 4, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };
+divisorAssignedPositive.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+hasDivisorGuardAround.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 4, harmPotential: "none", alignment: "degrading", intention: "benevolent", domain: "utility" };
+insideTryBlock.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkIntegrationInFn.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };
+findLeftBinding.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+findDereferences.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+hasInlineGuardBefore.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };
+checkEdgeCase.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "degrading", intention: "neutral", domain: "utility" };
+auditFile.atomicProperties = { charge: 0, valence: 2, mass: "medium", spin: "odd", phase: "solid", reactivity: "medium", electronegativity: 1, group: 6, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+auditFiles.atomicProperties = { charge: 0, valence: 2, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 13, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+checkSubstrateBypass.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "malevolent", domain: "utility" };

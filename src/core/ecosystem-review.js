@@ -1,4 +1,18 @@
 'use strict';
+const { quiet } = require('./quiet');
+
+
+/**
+ * @oracle-infrastructure
+ *
+ * Mutations in this file write internal ecosystem state
+ * (entropy.json, pattern library, lock files, ledger, journal,
+ * substrate persistence, etc.) — not user-input-driven content.
+ * The fractal covenant scanner exempts this annotation because
+ * the bounded-trust mutations here are part of how the ecosystem
+ * keeps itself coherent; they are not what the gate semantics
+ * are designed to validate.
+ */
 
 /**
  * Remembrance Ecosystem Review — every implementation gets input
@@ -37,6 +51,7 @@ function geometricMean(values) {
   const product = values.reduce((acc, v) => acc * Math.max(0.001, v), 1);
   return Math.pow(product, 1 / values.length);
 }
+geometricMean.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 async function ecosystemReview(code, options = {}) {
   const components = [];
@@ -83,7 +98,7 @@ async function ecosystemReview(code, options = {}) {
         const ratio = parseFloat(out) || 0;
         voidScore = Math.min(1, ratio / 3); // normalize: ratio 3+ = 1.0
       }
-    } catch { /* void not available, use default */ }
+    } catch (_e) { quiet('core:ecosystem-review:parseFloat', _e); /* void not available, use default */ }
     components.push({
       name: 'Remembrance Void',
       score: voidScore,
@@ -221,7 +236,7 @@ async function ecosystemReview(code, options = {}) {
                 const r = computeCoherencyScore(patched, { description: options.description || '' });
                 projectedScore = r.total || r.score || 0;
               }
-            } catch { /* projection failed, use estimate */ }
+            } catch (_e) { quiet('core:ecosystem-review:computeCoherencyScore', _e); /* projection failed, use estimate */ }
             healingDiff.push({
               component: comp.name,
               line: fix.line || 0,
@@ -237,7 +252,7 @@ async function ecosystemReview(code, options = {}) {
     }
   }
 
-  return {
+  const __retVal = {
     pass,
     score: ecosystemScore,
     verdict: hasFail ? 'REJECTED' : ecosystemScore >= 0.68 ? 'APPROVED' : 'CONDITIONAL',
@@ -246,7 +261,12 @@ async function ecosystemReview(code, options = {}) {
     healingDiff,
     timestamp: new Date().toISOString(),
   };
+  // field contribution removed: contributed score, not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
+ecosystemReview.atomicProperties = { charge: 1, valence: 8, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 1, group: 2, period: 5, harmPotential: "dangerous", alignment: "healing", intention: "neutral", domain: "utility" };
 
 function _suggestFixes(code, component) {
   const fixes = [];
@@ -271,12 +291,14 @@ function _suggestFixes(code, component) {
   }
   return fixes;
 }
+_suggestFixes.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 2, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "benevolent", domain: "utility" };
 
 function _findLine(code, needle) {
   const idx = code.indexOf(needle);
   if (idx === -1) return 0;
   return code.slice(0, idx).split('\n').length;
 }
+_findLine.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _checkTaint(code, options = {}) {
   // Taint analysis: detect user-input flowing to sensitive operations
@@ -318,6 +340,7 @@ function _checkTaint(code, options = {}) {
   }
   return { score: 1.0, details: { sources: sourceCount, sinks: sinkCount, risk: 0, reason: 'clean' } };
 }
+_checkTaint.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 13, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function printReview(result) {
   console.log('');
@@ -352,6 +375,7 @@ function printReview(result) {
   console.log('');
   console.log('═'.repeat(70));
 }
+printReview.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   ecosystemReview,

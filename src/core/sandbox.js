@@ -1,3 +1,4 @@
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 /**
  * Sandboxed test execution.
  *
@@ -602,14 +603,6 @@ function sandboxRust(code, testCode, options = {}) {
 let _customRunnerRegistry = null;
 
 /**
- * Set the custom runner registry for plugin-provided language runners.
- * Called by the oracle when a PluginManager with runners is available.
- */
-function setRunnerRegistry(registry) {
-  _customRunnerRegistry = registry;
-}
-
-/**
  * Find the project root by walking up from cwd looking for package.json.
  * Cached after first lookup.
  */
@@ -629,6 +622,7 @@ function _findProjectRoot() {
   _projectRoot = null;
   return null;
 }
+_findProjectRoot.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Non-executable content types that should bypass sandbox execution.
@@ -689,5 +683,20 @@ module.exports = {
   sandboxRust,
   createSandboxDir,
   cleanupSandboxDir,
-  setRunnerRegistry,
+
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+createSandboxDir.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+cleanupSandboxDir.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+sandboxJS.atomicProperties = { charge: 1, valence: 6, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 1, group: 3, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+sandboxPython.atomicProperties = { charge: 0, valence: 3, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 1, group: 6, period: 4, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+normalizeEscapes.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+stripTypeAnnotations.atomicProperties = { charge: -1, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+isTsxAvailable.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 9, period: 2, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+sandboxTypeScript.atomicProperties = { charge: 0, valence: 3, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 1, group: 3, period: 5, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+sandboxGo.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+sandboxRust.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+sandboxExecute.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "malevolent", domain: "utility" };

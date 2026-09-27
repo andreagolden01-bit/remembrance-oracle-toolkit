@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Oracle Core — Search and query (Quantum Observation).
  *
@@ -147,7 +148,7 @@ module.exports = {
         Math.min(1, classicalScore * 0.70 + bornProbability * 0.20 + observationBoost + languageBonus) * 1000
       ) / 1000;
 
-      return {
+      const __retVal = {
         source: item.source, id: item.id, name: item.name, description: item.description,
         language: item.language, tags: item.tags, coherency: item.coherency, code: item.code,
         matchScore, keywordScore: kwScore, semanticScore: semScore, holoScore, ngramScore,
@@ -158,14 +159,28 @@ module.exports = {
         quantumState: item.quantumState || QUANTUM_STATES.SUPERPOSITION,
         phase: item.phase || 0,
       };
+      // ── LRE field-coupling (auto-wired) ──
+      try {
+        const __lre_p1 = '../core/field-coupling';
+        const __lre_p2 = require('path').join(__dirname, '../core/field-coupling');
+        for (const __p of [__lre_p1, __lre_p2]) {
+          try {
+            const { recordCost: __recordCost } = require(__p);
+            __recordCost({ units: 1, kind: 'work', source: 'oracle:oracle-core-search:search' });
+            break;
+          } catch (_) { quiet('api:oracle-core-search:__recordCost', _); /* try next */ }
+        }
+      } catch (_) { quiet('api:oracle-core-search:__recordCost', _); /* best-effort */ }
+      return __retVal;
     }).filter(r => r.matchScore > 0);
 
     // ─── Quantum Tunneling ───
     // Low-amplitude items that didn't score high enough can still tunnel through
+    const scoredIds = new Set(scored.map(s => s.id));
     const tunneled = items
       .filter(item => {
         const amp = item.amplitude || item.coherency || PLANCK_AMPLITUDE;
-        return amp < 0.3 && amp > 0 && !scored.find(s => s.id === item.id);
+        return amp < 0.3 && amp > 0 && !scoredIds.has(item.id);
       })
       .filter(item => canTunnel(item.amplitude || item.coherency || PLANCK_AMPLITUDE, 0.3))
       .slice(0, Math.ceil(limit * 0.2));
@@ -186,11 +201,14 @@ module.exports = {
     }
 
     // ─── Quantum Interference ───
-    // Competing results interfere: similar code constructively, different destructively
-    applyFieldInterference(scored);
+    // Apply only to top candidates (O(k²) not O(n²))
+    const topK = scored
+      .sort((a, b) => b.matchScore - a.matchScore)
+      .slice(0, Math.min(50, limit * 3));
+    applyFieldInterference(topK);
 
     const seen = new Set();
-    const finalResults = scored
+    const finalResults = topK
       .sort((a, b) => b.matchScore - a.matchScore || (b.amplitude ?? 0) - (a.amplitude ?? 0))
       .filter(r => {
         const key = r.id || (r.code || '').slice(0, 100);
@@ -210,7 +228,7 @@ module.exports = {
     }
 
     // Track search interaction for session summary
-    try { trackSearch(term, finalResults, { mode, language, limit }); } catch (_) { /* non-fatal */ }
+    try { trackSearch(term, finalResults, { mode, language, limit }); } catch (_) { quiet('api:oracle-core-search:trackSearch', _); /* non-fatal */ }
 
     return finalResults;
   },
@@ -233,12 +251,21 @@ module.exports = {
       }));
   },
 
+  _searchCache: null,
+  _searchCacheKey: null,
+  _searchCacheTime: 0,
+
   _gatherSearchItems(language) {
+    const cacheKey = language || '__all__';
+    const now = Date.now();
+    if (this._searchCache && this._searchCacheKey === cacheKey && (now - this._searchCacheTime) < 30000) {
+      return this._searchCache;
+    }
+
     const filters = language ? { language } : {};
     const patterns = this.patterns.getAll(filters).map(p => ({
       source: 'pattern', id: p.id, name: p.name, description: p.description,
       language: p.language, tags: p.tags, coherency: p.coherencyScore?.total, code: p.code,
-      // Quantum state
       amplitude: p.amplitude || p.coherencyScore?.total || PLANCK_AMPLITUDE,
       phase: p.phase || 0,
       quantumState: p.quantumState || p.quantum_state || QUANTUM_STATES.SUPERPOSITION,
@@ -248,7 +275,6 @@ module.exports = {
     const history = this.store.getAll(filters).map(e => ({
       source: 'history', id: e.id, name: null, description: e.description,
       language: e.language, tags: e.tags, coherency: e.coherencyScore?.total, code: e.code,
-      // Quantum state
       amplitude: e.amplitude || e.coherencyScore?.total || PLANCK_AMPLITUDE,
       phase: e.phase || 0,
       quantumState: e.quantumState || e.quantum_state || QUANTUM_STATES.SUPERPOSITION,
@@ -257,11 +283,13 @@ module.exports = {
     }));
     const items = [...patterns, ...history];
 
-    // Build TF-IDF weights for embedding engine if available
     if (this._embeddingEngine) {
       this._embeddingEngine.buildIDF(items);
     }
 
+    this._searchCache = items;
+    this._searchCacheKey = cacheKey;
+    this._searchCacheTime = now;
     return items;
   },
 
@@ -300,5 +328,58 @@ module.exports = {
       harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
       domain: 'oracle',
     },
+  },
+
+  /**
+   * Native fractal-signature search — top-K cosine over the 116-D
+   * composed encoder, served from the in-memory FractalIndex built
+   * at construction and kept current by submit(). The default
+   * substrate search at scale; ~170× faster than oracle.query() at
+   * 10k patterns with identical top-1 domain accuracy.
+   *
+   * @param {string} text  query text — encoded fresh at call time
+   * @param {Object} [opts]
+   * @param {number} [opts.topK=10]
+   * @param {number} [opts.depth=4]   1..4 — sub-stack depth
+   * @param {number} [opts.minScore=0]
+   * @param {boolean} [opts.hydrate=true]  attach the full store entry
+   *   to each match. Set false for the bare {id, score} list.
+   * @returns {Array<{id, score, entry?}>}  sorted by score desc.
+   *   Returns [] when the index is not available rather than throwing,
+   *   so callers can fall back to the legacy query path on their own.
+   */
+  fractalSearch(text, opts = {}) {
+    if (!this._fractalIndex || typeof text !== 'string' || text.length === 0) return [];
+    const matches = this._fractalIndex.search(text, opts);
+    if (opts.hydrate === false) return matches;
+    const out = [];
+    for (const m of matches) {
+      let entry = null;
+      try { entry = this.store.get ? this.store.get(m.id) : null; } catch (_) { entry = null; }
+      out.push({ id: m.id, score: m.score, entry });
+    }
+    return out;
+  },
+
+  /**
+   * Export every indexed signature for round-trip into the field-tool
+   * library — the canonical bridge that makes the published package
+   * and the substrate visibly one system, sharing the same vectors.
+   *
+   * Format: array of { id, vec } where vec is a plain number[] of
+   * length 116 (Float64Array would not survive JSON.stringify). The
+   * field-tool's FractalIndex can ingest this array directly.
+   *
+   * @returns {Array<{id: string, vec: number[]}>}
+   */
+  exportSignatures() {
+    if (!this._fractalIndex) return [];
+    const out = [];
+    const ids = this._fractalIndex._ids;
+    const vecs = this._fractalIndex._vecs;
+    for (let i = 0; i < ids.length; i++) {
+      out.push({ id: ids[i], vec: Array.from(vecs[i]) });
+    }
+    return out;
   },
 };

@@ -1,3 +1,4 @@
+const { quiet } = require('../quiet');
 /**
  * AST-based code parser for enhanced coherency scoring.
  *
@@ -99,6 +100,7 @@ function parseJavaScript(code) {
 
   return result;
 }
+parseJavaScript.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "high", electronegativity: 0, group: 2, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Parse Python into structural info. Uses real `python3 -c compile()` for syntax
@@ -155,6 +157,7 @@ function parsePython(code) {
 
   return result;
 }
+parsePython.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 3, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Validate Python syntax by running python3 -c "compile(source, '<ast>', 'exec')".
@@ -180,12 +183,13 @@ function _validatePythonSyntax(code, result) {
       // python3 not found or other error — fall back to heuristic
       return _validatePythonHeuristic(code, result);
     } finally {
-      try { fs.unlinkSync(tmpFile); fs.rmdirSync(tmpDir); } catch (_) { /* cleanup best-effort */ }
+      try { fs.unlinkSync(tmpFile); fs.rmdirSync(tmpDir); } catch (_) { quiet('core:parsers:code-validator:execFileSync', _); /* cleanup best-effort */ }
     }
   } catch (_) {
     return _validatePythonHeuristic(code, result);
   }
 }
+_validatePythonSyntax.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 1, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /** Heuristic fallback for Python when python3 is not available. */
 function _validatePythonHeuristic(code, result) {
@@ -211,6 +215,7 @@ function _validatePythonHeuristic(code, result) {
   }
   return valid;
 }
+_validatePythonHeuristic.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Parse Rust into structural info. Uses `rustfmt --check` for syntax validation
@@ -266,6 +271,7 @@ function parseRust(code) {
 
   return result;
 }
+parseRust.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 3, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Parse Go into structural info. Uses `gofmt -e` for syntax validation
@@ -326,6 +332,7 @@ function parseGo(code) {
 
   return result;
 }
+parseGo.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 3, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Validate code syntax via an external tool (rustfmt, gofmt, etc.).
@@ -353,12 +360,13 @@ function _validateExternalTool(tool, args, code, ext, result) {
       // Tool not found — fall back to heuristic
       return _heuristicBraceValidation(code, result);
     } finally {
-      try { fs.unlinkSync(tmpFile); fs.rmdirSync(tmpDir); } catch (_) { /* cleanup best-effort */ }
+      try { fs.unlinkSync(tmpFile); fs.rmdirSync(tmpDir); } catch (_) { quiet('core:parsers:code-validator:execFileSync', _); /* cleanup best-effort */ }
     }
   } catch (_) {
     return _heuristicBraceValidation(code, result);
   }
 }
+_validateExternalTool.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /** Fallback heuristic: balanced braces + structure keywords. */
 function _heuristicBraceValidation(code, result) {
@@ -371,6 +379,7 @@ function _heuristicBraceValidation(code, result) {
   if (depth !== 0) { result.errors.push('Unbalanced braces'); return false; }
   return true;
 }
+_heuristicBraceValidation.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Universal parse function — dispatches to language-specific parser.
@@ -394,6 +403,7 @@ function parseCode(code, language) {
       return parseGeneric(code);
   }
 }
+parseCode.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Generic parser for unsupported languages.
@@ -420,6 +430,7 @@ function parseGeneric(code) {
     errors: depth !== 0 ? ['Unbalanced brackets'] : [],
   };
 }
+parseGeneric.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Enhanced coherency scoring using AST data.
@@ -453,6 +464,7 @@ function astCoherencyBoost(code, language) {
     parsed,
   };
 }
+astCoherencyBoost.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   parseCode,

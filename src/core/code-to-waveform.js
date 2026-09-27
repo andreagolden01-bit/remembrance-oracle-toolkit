@@ -1,84 +1,107 @@
 'use strict';
 
 /**
- * codeToWaveform — JS port of void's _code_to_waveform (Python).
+ * code-to-waveform.js — oracle's canonical encoder. ONE representation.
  *
- * Converts a code string to a 256-sample waveform in [0, 1]:
- *   1. UTF-8 encode → byte array (uint8)
- *   2. Linear interpolation to 256 points (np.interp equivalent)
- *   3. Min-max normalize; degenerate input → flat 0.5
+ * `codeToWaveform` IS the 232-D fractal decoder at its active depth
+ * (decoder-stack.composedAtDepth, 8 layers × 29). It used to be the 29-D L1
+ * alone (fractal-waveform.toFractalWaveform), and before that the 256-sample
+ * byte-stretch. Both are retired here: the L1 is the first 29 dims of the
+ * one vector and is never carried as a vector of its own, and nothing in the
+ * ecosystem encodes to 256-D (see RETIRED_BYTE_LEN below).
  *
- * Byte-identical to the Python reference for the same input string,
- * verified by tests/code-to-waveform.test.js. Both are deterministic
- * and side-effect-free.
+ * `waveformCosine` is the one cosine (ECOSYSTEM §7): decoder-stack's
+ * composedCosine, which carries both vectors into the one whitened space.
+ * A vector that is not the canonical width is not a reading — NaN says
+ * "no vector", never a number (0 would read as orthogonal, which is a
+ * reading). This is what makes a stale row invisible instead of wrong.
  *
- * Use: oracle's auto-submit, registration, and feedback paths can
- * compute their own waveform without round-tripping to a Python
- * subprocess.
+ * Migration: field rows written before this carried 29-D (and, earlier,
+ * 256-D) waveforms; scripts/migrate-waveforms-to-fractal.js re-encodes any
+ * row whose width is not TARGET_LEN from its source `code` column.
+ *
+ * Cross-language parity: Python reaches the same decoder through Void's
+ * canonical_vector.py (WIDTH = 232), so JS↔Python parity holds for the
+ * canonical vector itself (contract C-67 drives both engines).
  */
 
-const TARGET_LEN = 256;
+const { composedAtDepth, composedCosine, currentDepth } = require('./decoder-stack');
+
+const LAYER_DIM = 29;
+
+// THE width: the decoder at its active depth, asked for — never written down.
+const TARGET_LEN = currentDepth() * LAYER_DIM;
+
+// ─── RETIRED: the 256-D byte-stretch ──────────────────────────────────────
+// The byte-stretch pair (linear-interpolated UTF-8 bytes onto a 256-point
+// grid) were the previous representation of a pattern. They could not tell
+// code from prose (a JS file and a README read 0.86 cosine, above real
+// code-vs-code pairs) and were retired with Void's to_waveform.py
+// (ECOSYSTEM §7). The functions are GONE. The one number that survives is
+// the width, so the migration script can still recognise legacy rows on
+// disk. It is a marker of what was, never a target to encode to.
+const RETIRED_BYTE_LEN = 256;
 
 /**
- * np.interp(x, xp, fp) for the specific shape we need:
- *   xp = [0, 1, ..., n-1]
- *   x  = linspace(0, n-1, 256)
- *
- * Returns Float64Array of length 256.
+ * The canonical vector of a text: the 232-D decoder at the active depth.
+ * Empty / non-string input is the zero vector at the canonical width.
+ * @param {string} input
+ * @returns {Float64Array}
  */
-function _linearInterp(fp, targetLen) {
-  const n = fp.length;
-  const out = new Float64Array(targetLen);
-  if (n === 0) return out;
-  if (n === 1) { out.fill(fp[0]); return out; }
-  const step = (n - 1) / (targetLen - 1);
-  for (let i = 0; i < targetLen; i++) {
-    const x = i * step;
-    const j = Math.floor(x);
-    if (j >= n - 1) {
-      out[i] = fp[n - 1];
-    } else {
-      const t = x - j;
-      out[i] = fp[j] + t * (fp[j + 1] - fp[j]);
+function codeToWaveform(input) {
+  if (typeof input !== 'string' || input.length === 0) return new Float64Array(TARGET_LEN);
+  return composedAtDepth(input, currentDepth());
+}
+
+/**
+ * The one cosine between two canonical vectors, in the one space.
+ * NaN when either side is not a canonical-width vector (no reading);
+ * 0 when either side has no structure (the zero vector).
+ */
+function waveformCosine(a, b) {
+  if (!_canonical(a) || !_canonical(b)) return NaN;
+  return composedCosine(a, b);
+}
+
+function _canonical(v) {
+  return !!v && typeof v.length === 'number' && v.length === TARGET_LEN;
+}
+
+// ─── Stable fingerprint (used for dedup IDs across the codebase) ─────────
+
+/** FNV-1a over the waveform's 4-decimal string form. Deterministic and
+ * dependency-free. Note: this hash changes when the encoder changes, so
+ * digests recorded by an earlier encoder differ from digests computed by
+ * the decoder for the same source. */
+function digestWaveform(wf) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < wf.length; i++) {
+    const s = wf[i].toFixed(4);
+    for (let j = 0; j < s.length; j++) {
+      h ^= s.charCodeAt(j);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
     }
   }
-  return out;
+  return h.toString(16).padStart(8, '0');
 }
 
-/**
- * Convert a code string to a 256-sample float64 waveform in [0, 1].
- * Empty input → all zeros. Constant input (after interp) → all 0.5.
- */
-function codeToWaveform(code) {
-  if (typeof code !== 'string' || code.length === 0) {
-    return new Float64Array(TARGET_LEN);
-  }
-  const bytes = Buffer.from(code, 'utf8');
-  const fp = new Float64Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) fp[i] = bytes[i];
+// ─── Canonical exports ───────────────────────────────────────────────────
 
-  const wf = _linearInterp(fp, TARGET_LEN);
-
-  let lo = wf[0], hi = wf[0];
-  for (let i = 1; i < TARGET_LEN; i++) {
-    if (wf[i] < lo) lo = wf[i];
-    if (wf[i] > hi) hi = wf[i];
-  }
-  if (hi - lo < 1e-10) {
-    const flat = new Float64Array(TARGET_LEN);
-    flat.fill(0.5);
-    return flat;
-  }
-  const span = hi - lo;
-  for (let i = 0; i < TARGET_LEN; i++) wf[i] = (wf[i] - lo) / span;
-  return wf;
-}
-
-module.exports = { codeToWaveform, TARGET_LEN };
-
-codeToWaveform.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 1, period: 2,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'core',
+module.exports = {
+  // Canonical: the 232-D decoder at its active depth.
+  TARGET_LEN,
+  LAYER_DIM,
+  codeToWaveform,
+  waveformCosine,
+  digestWaveform,
+  // The retired representation's width — a marker for migration, not an encoder.
+  RETIRED_BYTE_LEN,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+codeToWaveform.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+waveformCosine.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+_canonical.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+digestWaveform.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

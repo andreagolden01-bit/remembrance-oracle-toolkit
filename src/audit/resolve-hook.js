@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Resolve Hook — checks the shape of new code against known bug classes.
@@ -161,7 +162,7 @@ function enhanceResolveWithBugClasses(resolveResult, oracle) {
             amplitude: debugMatches[0].amplitude,
           };
         }
-      } catch (_) {
+      } catch (_) { quiet('audit:resolve-hook:checkResolvedCode', _);
         // Debug search is optional
       }
     }
@@ -237,3 +238,10 @@ module.exports = {
   classifyDebugFix,
   BUG_CLASS_SIGNATURES,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+checkResolvedCode.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+enhanceResolveWithBugClasses.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+classifyDebugFix.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };

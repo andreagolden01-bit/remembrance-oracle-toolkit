@@ -21,11 +21,11 @@ describe('OracleConfig', () => {
   });
 
   // Re-require to pick up fresh cwd each time
-  function freshConfig() {
+  const freshConfig = () => {
     const modPath = require.resolve('../src/core/oracle-config');
     delete require.cache[modPath];
     return require('../src/core/oracle-config');
-  }
+  };
 
   it('returns default config when no file exists', () => {
     const { loadConfig, DEFAULT_CONFIG } = freshConfig();

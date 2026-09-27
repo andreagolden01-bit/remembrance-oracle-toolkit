@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('./quiet');
 
 /**
  * LLM-Powered SERF Healing — Deep Reasoning Mode
@@ -341,9 +342,9 @@ function structuralHeal(code, language, currentScore) {
   healed = applySimplify(healed, language);
   healed = applySecure(healed, language);
   healed = applyReadable(healed, language);
-  try { healed = applyUnify(healed, language); } catch {}
-  try { healed = applyCorrect(healed, language); } catch {}
-  return {
+  try { healed = applyUnify(healed, language); } catch (_e) { quiet('core:llm-healing:applyUnify', _e);}
+  try { healed = applyCorrect(healed, language); } catch (_e) { quiet('core:llm-healing:applyCorrect', _e);}
+  const __retVal = {
     code: healed,
     coherency: currentScore.total || 0,
     improved: healed !== code,
@@ -352,6 +353,19 @@ function structuralHeal(code, language, currentScore) {
     changes: [{ attempt: 0, method: 'structural' }],
     method: 'structural',
   };
+  // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:llm-healing:structuralHeal' });
+        break;
+      } catch (_) { quiet('core:llm-healing:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('core:llm-healing:__recordCost', _); /* best-effort */ }
+  return __retVal;
 }
 
 // ─── Integrated Healing (auto mode) ──────────────────────────────
@@ -417,3 +431,16 @@ module.exports = {
   extractWhisper,
   LLM_HEAL_DEFAULTS,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+detectLlmProvider.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getProviderConfig.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+callLlm.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 1, group: 9, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+buildDiagnosisPrompt.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "dangerous", alignment: "healing", intention: "neutral", domain: "utility" };
+extractCodeFromResponse.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractWhisper.atomicProperties = { charge: -1, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+llmHeal.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+structuralHeal.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 9, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+smartHeal.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };

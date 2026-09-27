@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Dependency Scanner — Supply Chain Security
@@ -199,11 +200,11 @@ function scanSinglePackage(pkgPath, options = {}) {
             flags.push('covenant-violation-deep');
             reasons.push(`Deep scan: ${relPath} covenant violation`);
           }
-        } catch {
+        } catch (_e) { quiet('audit:dep-scanner:covenantCheck', _e);
           // Skip unreadable files in deep scan
         }
       }
-    } catch {
+    } catch (_e) { quiet('audit:dep-scanner:covenantCheck', _e);
       // Skip if directory listing fails
     }
   }
@@ -243,12 +244,12 @@ function collectJsFiles(dir, limit, excludePath) {
               results.push(path.join(fullPath, sub.name));
             }
           }
-        } catch {
+        } catch (_e) { quiet('audit:dep-scanner:collectJsFiles', _e);
           // Skip inaccessible subdirectories
         }
       }
     }
-  } catch {
+  } catch (_e) { quiet('audit:dep-scanner:collectJsFiles', _e);
     // Skip inaccessible directories
   }
 
@@ -351,21 +352,11 @@ module.exports = {
 };
 
 // ── Atomic self-description ─────────────────────────────────────
-scanDependencies.atomicProperties = {
-  charge: 0, valence: 3, mass: 'heavy', spin: 'odd', phase: 'solid',
-  reactivity: 'reactive', electronegativity: 0.5, group: 11, period: 3,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
-scanSinglePackage.atomicProperties = {
-  charge: 0, valence: 2, mass: 'medium', spin: 'odd', phase: 'solid',
-  reactivity: 'reactive', electronegativity: 0.4, group: 11, period: 2,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
-computeEntropy.atomicProperties = {
-  charge: 0, valence: 1, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 1, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'security',
-};
+scanDependencies.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 3, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+scanSinglePackage.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 0, group: 3, period: 4, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeEntropy.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+collectJsFiles.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "degrading", intention: "neutral", domain: "utility" };

@@ -59,6 +59,9 @@ export interface LeadFormData {
   purchaseIntent: string;
   veteranStatus: string;
   militaryBranch: string;
+  ageRange: string;
+  preferredContactTime: string;
+  message: string;
   tcpaConsent: boolean;
   privacyConsent: boolean;
   // Honeypot field — must remain empty for humans
@@ -90,8 +93,8 @@ export const FIELD_LABELS: Record<keyof LeadFormErrors, string> = {
   email: "Email Address",
   phone: "Phone Number",
   state: "State",
-  coverageInterest: "Coverage Interest",
-  purchaseIntent: "How Serious Are You",
+  coverageInterest: "What Changed",
+  purchaseIntent: "Readiness",
   veteranStatus: "Your Background",
   militaryBranch: "Branch of Service",
   tcpaConsent: "TCPA Consent",
@@ -151,7 +154,7 @@ function validateStep(step: number, form: LeadFormData): LeadFormErrors {
       errs.dateOfBirth = "You must be at least 18 years old to submit this form.";
     }
     if (!form.state) errs.state = "Please select your state.";
-    if (!form.coverageInterest) errs.coverageInterest = "Please select a coverage interest.";
+    if (!form.coverageInterest) errs.coverageInterest = "Please select what changed in your life.";
     if (!form.purchaseIntent) errs.purchaseIntent = "Please select your level of interest.";
     if (!form.veteranStatus) errs.veteranStatus = "Please select your background.";
     // Branch is required ONLY for service-connected statuses. Family-members
@@ -231,6 +234,7 @@ function clearFormDraft(): void {
 const INITIAL_FORM: LeadFormData = {
   firstName: "", lastName: "", dateOfBirth: "", email: "", phone: "",
   state: "", coverageInterest: "", purchaseIntent: "", veteranStatus: "", militaryBranch: "",
+  ageRange: "", preferredContactTime: "", message: "",
   tcpaConsent: false, privacyConsent: false, _hp_website: "",
 };
 
@@ -262,7 +266,7 @@ export function useLeadForm(utmParams?: Record<string, string | null>): UseLeadF
   const THROTTLE_MS = 3000;
 
   const updateField = useCallback((field: keyof LeadFormData, value: string | boolean) => {
-    setForm((prev) => {
+    setForm((prev: LeadFormData) => {
       const next = { ...prev, [field]: value };
       // Clear military branch when status changes (user must re-select for new status)
       if (field === "veteranStatus") {
@@ -270,7 +274,7 @@ export function useLeadForm(utmParams?: Record<string, string | null>): UseLeadF
       }
       return next;
     });
-    setErrors((prev) => {
+    setErrors((prev: LeadFormErrors) => {
       const next = { ...prev };
       if (next[field as keyof LeadFormErrors]) {
         delete next[field as keyof LeadFormErrors];
@@ -300,7 +304,7 @@ export function useLeadForm(utmParams?: Record<string, string | null>): UseLeadF
   const prevStep = useCallback(() => {
     setErrors({});
     setServerError("");
-    setStep((prev) => Math.max(prev - 1, 0));
+    setStep((prev: number) => Math.max(prev - 1, 0));
   }, []);
 
   const goToStep = useCallback((target: number) => {
@@ -337,6 +341,9 @@ export function useLeadForm(utmParams?: Record<string, string | null>): UseLeadF
             && data.veteranStatus !== "non-military"
             && data.veteranStatus !== "civilian"
             ? data.militaryBranch : "",
+          ageRange: sanitizeInput(data.ageRange),
+          preferredContactTime: sanitizeInput(data.preferredContactTime),
+          message: sanitizeInput(data.message),
           tcpaConsent: data.tcpaConsent,
           privacyConsent: data.privacyConsent,
           consentTimestamp: new Date().toISOString(),
@@ -394,7 +401,7 @@ export function useLeadForm(utmParams?: Record<string, string | null>): UseLeadF
       }
       // Scroll to the first invalid field after React renders
       requestAnimationFrame(() => {
-        const firstErrorField = errorFields
+        const firstErrorField = [...errorFields]
           .sort((a, b) => FIELD_STEP[a] - FIELD_STEP[b])[0];
         const el = document.getElementById(String(firstErrorField));
         if (el) {

@@ -1,3 +1,4 @@
+const { rmFixture } = require('./helpers');
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -35,7 +36,7 @@ describe('Compression Integration', () => {
 
   after(() => {
     if (store) store.close();
-    fs.rmSync(TEST_DIR, { recursive: true, force: true });
+    rmFixture(TEST_DIR, { recursive: true, force: true });
   });
 
   it('should run full compression pipeline', () => {
@@ -123,7 +124,7 @@ describe('Compression Integration', () => {
     assert.equal(statsAfter.embeddingCount, 0, 'Dry run should not store embeddings');
 
     dryStore.close();
-    fs.rmSync(dryRunDir, { recursive: true, force: true });
+    rmFixture(dryRunDir, { recursive: true, force: true });
   });
 
   it('should have compression performance under 100ms for small stores', () => {
@@ -148,6 +149,6 @@ describe('Compression Integration', () => {
     assert.ok(elapsed < 5000, `Compression should complete under 5s for 20 patterns, took ${elapsed}ms`);
 
     perfStore.close();
-    fs.rmSync(perfDir, { recursive: true, force: true });
+    rmFixture(perfDir, { recursive: true, force: true });
   });
 });

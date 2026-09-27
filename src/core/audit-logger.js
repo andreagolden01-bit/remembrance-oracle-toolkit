@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('./quiet');
 
 /**
  * Audit Logger — immutable, append-only audit trail for oracle operations.
@@ -37,7 +38,7 @@ function initAuditLog(baseDir) {
   _auditStream.on('error', (err) => {
     if (process.env.ORACLE_DEBUG) console.error('[audit-logger] stream error — audit entries may be lost:', err.message);
     // Attempt to re-open the stream on next write
-    try { _auditStream.destroy(); } catch (_) { /* already destroyed */ }
+    try { _auditStream.destroy(); } catch (_) { quiet('core:audit-logger:initAuditLog', _); /* already destroyed */ }
     _auditStream = null;
   });
 }
@@ -68,15 +69,15 @@ function auditLog(action, details = {}) {
         _auditStream = fs.createWriteStream(logPath, { flags: 'a', encoding: 'utf-8' });
         _auditStream.on('error', (err) => {
           if (process.env.ORACLE_DEBUG) console.error('[audit-logger] stream error:', err.message);
-          try { _auditStream.destroy(); } catch (_) {}
+          try { _auditStream.destroy(); } catch (_) { quiet('core:audit-logger:auditLog', _);}
           _auditStream = null;
         });
-      } catch (_) { /* cannot reinitialize — entries lost until explicit re-init */ }
+      } catch (_) { quiet('core:audit-logger:auditLog', _); /* cannot reinitialize — entries lost until explicit re-init */ }
     }
     if (_auditStream && !_auditStream.destroyed) {
       _auditStream.write(line);
     }
-  } catch (_) {
+  } catch (_) { quiet('core:audit-logger:auditLog', _);
     // Audit logging must never throw — silent swallow by design
   }
 }
@@ -118,5 +119,14 @@ function _resetAuditLog() {
   closeAuditLog();
   _auditDir = null;
 }
+_resetAuditLog.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = { initAuditLog, auditLog, readAuditLog, closeAuditLog, _resetAuditLog };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+initAuditLog.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 8, period: 2, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+auditLog.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 8, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+readAuditLog.atomicProperties = { charge: -1, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+closeAuditLog.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 8, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

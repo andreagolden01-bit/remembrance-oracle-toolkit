@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * The Oracle API — the main interface for AIs and humans.
  *
@@ -39,8 +40,14 @@ const eternalMethods = require('./oracle-eternal');
 
 class RemembranceOracle {
   constructor(options = {}) {
-    this.store = options.store || new VerifiedHistoryStore(options.baseDir);
-    const storeDir = this.store.storeDir || require('path').join(options.baseDir || process.cwd(), '.remembrance');
+    // `baseDir` is the documented rooting option; `storeDir` is accepted as
+    // an alias because callers (14 test suites among them) already pass it —
+    // and when it was silently ignored, every one of those oracles landed on
+    // the LIVE repo store at process.cwd()/.remembrance instead of its own
+    // sandbox. A named option must either work or throw; this one now works.
+    const baseDir = options.baseDir || options.storeDir;
+    this.store = options.store || new VerifiedHistoryStore(baseDir);
+    const storeDir = this.store.storeDir || require('path').join(baseDir || process.cwd(), '.remembrance');
     this.patterns = options.patterns || new PatternLibrary(storeDir);
     this.threshold = options.threshold ?? 0.6;
     this._listeners = [];
@@ -76,6 +83,7 @@ class RemembranceOracle {
         if (sqliteStore) {
           this._quantumField = new QuantumField(sqliteStore, {
             verbose: options.verbose || false,
+            onCascade: (event) => this._handleCascadeSpawn(event),
           });
           if (process.env.ORACLE_DEBUG) console.log('[oracle] Quantum field initialized');
         }
@@ -95,7 +103,7 @@ class RemembranceOracle {
     // Initialise audit logging
     try {
       initAuditLog(require('path').dirname(storeDir));
-    } catch (_) {
+    } catch (_) { quiet('api:oracle:require', _);
       // Audit init failures are non-fatal
     }
 
@@ -111,6 +119,19 @@ class RemembranceOracle {
         wireHistory(require('path').dirname(storeDir));
       } catch (e) {
         if (process.env.ORACLE_DEBUG) console.warn('[oracle] reactions init failed:', e.message);
+      }
+    }
+
+    // Wire every emitted event into the LRE field. The bridge is the
+    // compass: each event type lands as `event:<type>` in the source
+    // histogram, so non-coders can see what's firing in real time.
+    // Best-effort — bridge failures never block the emit path.
+    if (options.fieldBridge !== false) {
+      try {
+        const { wireEventFieldBridge } = require('../core/event-field-bridge');
+        wireEventFieldBridge(this);
+      } catch (e) {
+        if (process.env.ORACLE_DEBUG) console.warn('[oracle] field bridge init failed:', e.message);
       }
     }
 
@@ -132,10 +153,10 @@ class RemembranceOracle {
       try {
         const { seedLibrary, seedExtendedLibrary, seedNativeLibrary, seedProductionLibrary3, seedProductionLibrary4 } = require('../patterns/seed-helpers');
         seedLibrary(this);
-        try { seedExtendedLibrary(this, {}); } catch (_) {}
-        try { seedNativeLibrary(this, {}); } catch (_) {}
-        try { seedProductionLibrary3(this, {}); } catch (_) {}
-        try { seedProductionLibrary4(this, {}); } catch (_) {}
+        try { seedExtendedLibrary(this, {}); } catch (_) { quiet('api:oracle:seedExtendedLibrary', _);}
+        try { seedNativeLibrary(this, {}); } catch (_) { quiet('api:oracle:seedNativeLibrary', _);}
+        try { seedProductionLibrary3(this, {}); } catch (_) { quiet('api:oracle:seedProductionLibrary3', _);}
+        try { seedProductionLibrary4(this, {}); } catch (_) { quiet('api:oracle:seedProductionLibrary4', _);}
       } catch (e) {
         if (process.env.ORACLE_DEBUG) console.warn('[oracle] auto-seed failed:', e.message);
       }
@@ -167,11 +188,111 @@ class RemembranceOracle {
       }
     }
 
+    // Fractal signature index — native in-memory search backend over
+    // the 116-D composed encoder. Built best-effort: any failure here
+    // (encoder import, store iteration) leaves oracle functional with
+    // the legacy description+tag query path still wired.
+    this._fractalIndex = null;
+    if (options.fractalIndex !== false) {
+      try {
+        const { FractalIndex } = require('../core/fractal-index');
+        this._fractalIndex = new FractalIndex();
+        const existing = this.store.getAll ? this.store.getAll() : [];
+        if (existing.length > 0) {
+          this._fractalIndex.rebuild(
+            existing
+              .filter(e => e && e.id != null && typeof e.code === 'string')
+              .map(e => ({ id: String(e.id), text: e.code }))
+          );
+        }
+        if (process.env.ORACLE_DEBUG) {
+          console.log(`[oracle] fractal index ready (${this._fractalIndex.size()} patterns)`);
+        }
+      } catch (e) {
+        this._fractalIndex = null;
+        if (process.env.ORACLE_DEBUG) console.warn('[oracle] fractal index init failed:', e.message);
+      }
+    }
+
     // Register process exit handler to flush critical in-memory state.
     // This is the last-chance safety net before the process dies.
     this._exitHandlerInstalled = false;
     if (options.exitHandler !== false) {
       this._installExitHandler();
+    }
+  }
+
+  /**
+   * Default cascade-spawn handler — fired by QuantumField when a pattern's
+   * amplitude crosses CASCADE_THRESHOLD upward on a successful feedback.
+   *
+   * Delegates to the existing recycler primitive (_generateTournamentContenders)
+   * to spawn 2 variants of the seed, stores them as candidates tagged
+   * 'cascade-spawn', entangles the spawned siblings with each other, and
+   * emits a 'cascade_spawn' event for downstream consumers.
+   *
+   * Only spawns from the patterns table — candidate-table feedback that
+   * crosses the threshold is intentionally ignored to prevent recursive
+   * cascades. A candidate that gets promoted to a pattern can cascade later.
+   */
+  _handleCascadeSpawn({ table, id, previousAmplitude, newAmplitude, threshold }) {
+    if (table !== 'patterns') return;
+    if (!this._quantumField || !this.recycler) return;
+
+    try {
+      const sqliteStore = this.store.getSQLiteStore ? this.store.getSQLiteStore() : null;
+      if (!sqliteStore) return;
+      const seed = sqliteStore.db.prepare('SELECT * FROM patterns WHERE id = ?').get(id);
+      if (!seed) return;
+
+      const seedPattern = {
+        name: seed.name,
+        code: seed.code,
+        language: seed.language,
+        patternType: seed.pattern_type,
+        description: seed.description || '',
+        tags: (seed.tags || '').split(',').filter(Boolean),
+        testCode: seed.test_code,
+      };
+
+      const knownNames = new Set(this.patterns.getAll().map(p => p.name));
+      const contenders = this.recycler._generateTournamentContenders(seedPattern, 2, knownNames);
+      if (!contenders || contenders.length === 0) return;
+
+      const childIds = [];
+      for (const c of contenders) {
+        try {
+          const stored = sqliteStore.addCandidate({
+            ...c,
+            tags: [...(c.tags || []), 'cascade-spawn'],
+            parentPattern: seedPattern.name,
+          });
+          if (stored?.id) childIds.push(stored.id);
+        } catch (_e) { quiet('api:oracle:String', _e); /* per-candidate failures don't block siblings */ }
+      }
+
+      // Sibling entanglement — spawned variants know about each other.
+      // Cross-table parent↔child entanglement isn't supported by the
+      // current entangle() implementation (single-table only).
+      if (childIds.length > 1) {
+        for (let i = 0; i < childIds.length; i++) {
+          for (let j = i + 1; j < childIds.length; j++) {
+            try { this._quantumField.entangle('candidates', childIds[i], childIds[j]); } catch (_e) { quiet('api:oracle:c7', _e); /* best-effort */ }
+          }
+        }
+      }
+
+      this._emit?.({
+        type: 'cascade_spawn',
+        table,
+        id,
+        spawned: childIds.length,
+        previousAmplitude,
+        newAmplitude,
+        threshold,
+      });
+    } catch (e) {
+      if (process.env.ORACLE_DEBUG) console.warn('[oracle:cascade-spawn]', e?.message || e);
     }
   }
 
@@ -192,7 +313,7 @@ class RemembranceOracle {
           const storeDir = this.store?.storeDir || require('path').join(process.cwd(), '.remembrance');
           saveSession(storeDir);
         }
-      } catch (_) { /* must never throw in exit handler */ }
+      } catch (_) { quiet('api:oracle:saveSession', _); /* must never throw in exit handler */ }
 
       try {
         // Persist lifecycle counters and history
@@ -200,7 +321,7 @@ class RemembranceOracle {
           this._lifecycle._persistCounters();
           this._lifecycle._persistHistory();
         }
-      } catch (_) { /* must never throw in exit handler */ }
+      } catch (_) { quiet('api:oracle:saveSession', _); /* must never throw in exit handler */ }
     };
 
     // 'beforeExit' fires when the event loop drains (not on SIGTERM/SIGINT)

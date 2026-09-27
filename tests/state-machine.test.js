@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { createStateMachine } = require('../seeds/code/state-machine');
 
 describe('state-machine', () => {
-  function trafficLight() {
+  const trafficLight = () => {
     return createStateMachine({
       initial: 'green',
       states: {
@@ -12,7 +12,7 @@ describe('state-machine', () => {
         red:    { on: { TIMER: 'green' } },
       },
     });
-  }
+  };
 
   it('should start in initial state', () => {
     const sm = trafficLight();

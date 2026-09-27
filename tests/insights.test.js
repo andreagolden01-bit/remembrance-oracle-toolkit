@@ -14,7 +14,7 @@ const {
 } = require('../src/analytics/insights');
 
 // Helper: create a mock oracle with in-memory patterns
-function createMockOracle(patterns = [], entries = []) {
+const createMockOracle = (patterns = [], entries = []) => {
   return {
     patterns: {
       getAll: () => patterns,
@@ -25,9 +25,9 @@ function createMockOracle(patterns = [], entries = []) {
       db: null,
     },
   };
-}
+};
 
-function makePattern(overrides = {}) {
+const makePattern = (overrides = {}) => {
   return {
     id: overrides.id || `p-${Math.random().toString(36).slice(2, 8)}`,
     name: overrides.name || 'test-pattern',
@@ -43,7 +43,7 @@ function makePattern(overrides = {}) {
     evolutionHistory: overrides.evolutionHistory || [],
     ...(overrides.extra || {}),
   };
-}
+};
 
 // ─── mostPulledPatterns ───
 

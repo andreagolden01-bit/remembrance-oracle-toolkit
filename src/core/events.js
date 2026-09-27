@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('./quiet');
 
 /**
  * Oracle event bus.
@@ -126,7 +127,7 @@ class OracleEventBus {
         if (r && typeof r.then === 'function') results.push(r.catch(e => _reportError(event, e)));
       } catch (e) { _reportError(event, e); }
     }
-    if (results.length > 0) { try { await Promise.all(results); } catch { /* already reported */ } }
+    if (results.length > 0) { try { await Promise.all(results); } catch (_e) { quiet('core:events:_reportError', _e); /* already reported */ } }
     return handlers.length;
   }
 
@@ -170,6 +171,7 @@ function _reportError(event, err) {
     console.warn(`[events:${event}] handler error:`, err?.message || err);
   }
 }
+_reportError.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── Standard event name catalog ────────────────────────────────────────────
 
@@ -228,3 +230,10 @@ module.exports = {
   wireHistoryPersistence,
   EVENTS,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+getEventBus.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+resetEventBus.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+wireHistoryPersistence.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "low", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "malevolent", domain: "utility" };

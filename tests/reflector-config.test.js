@@ -24,11 +24,11 @@ const {
 
 // ─── Helpers ───
 
-function createTmpDir() {
+const createTmpDir = () => {
   const dir = join(tmpdir(), `config-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
-}
+};
 
 // ─── Defaults Tests ───
 

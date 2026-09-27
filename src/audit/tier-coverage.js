@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Tier-coverage check — architectural self-similarity enforcement.
@@ -298,7 +299,7 @@ function checkFile(filePath, options = {}) {
   try {
     const { registerTierCoverageSignal } = require('../unified/emergent-coherency');
     registerTierCoverageSignal(touched.length, totalTiers);
-  } catch { /* emergent module not available */ }
+  } catch (_e) { quiet('audit:tier-coverage:registerTierCoverageSignal', _e); /* emergent module not available */ }
 
   // If the file meets the coverage minimum, it passes.
   if (touched.length >= minCoverage) {
@@ -347,24 +348,8 @@ function buildSuggestion(manifest, touched, missing) {
   ].join('\n');
 }
 
-/**
- * Convenience: run the check across multiple files and aggregate.
- * Useful for the audit CLI and the stop hook.
- */
-function checkFiles(files, options = {}) {
-  const results = [];
-  let totalFindings = 0;
-  for (const file of files || []) {
-    const r = checkFile(file, options);
-    results.push({ file, ...r });
-    totalFindings += r.findings.length;
-  }
-  return { files: results, totalFindings };
-}
-
 module.exports = {
   checkFile,
-  checkFiles,
   loadArchitectureManifest,
   findManifestForFile,
   extractCalledIdentifiers,
@@ -373,45 +358,14 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-checkFile.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
-checkFiles.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
-loadArchitectureManifest.atomicProperties = {
-  charge: 0, valence: 0, mass: 'medium', spin: 'odd', phase: 'gas',
-  reactivity: 'medium', electronegativity: 0, group: 6, period: 2,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
-findManifestForFile.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
-extractCalledIdentifiers.atomicProperties = {
-  charge: 0, valence: 3, mass: 'heavy', spin: 'even', phase: 'gas',
-  reactivity: 'medium', electronegativity: 1, group: 3, period: 3,
-  harmPotential: 'dangerous', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
-tiersTouched.atomicProperties = {
-  charge: 1, valence: 0, mass: 'heavy', spin: 'even', phase: 'solid',
-  reactivity: 'inert', electronegativity: 0, group: 4, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
-findOptOut.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 3, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
+checkFile.atomicProperties = { charge: 0, valence: 2, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 1, group: 3, period: 4, harmPotential: "moderate", alignment: "neutral", intention: "neutral", domain: "utility" };
+loadArchitectureManifest.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+findManifestForFile.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractCalledIdentifiers.atomicProperties = { charge: 0, valence: 3, mass: "heavy", spin: "even", phase: "gas", reactivity: "medium", electronegativity: 1, group: 3, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+tiersTouched.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 4, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+findOptOut.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+buildSuggestion.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

@@ -1,4 +1,18 @@
 'use strict';
+const { quiet } = require('./quiet');
+
+
+/**
+ * @oracle-infrastructure
+ *
+ * Mutations in this file write internal ecosystem state
+ * (entropy.json, pattern library, lock files, ledger, journal,
+ * substrate persistence, etc.) — not user-input-driven content.
+ * The fractal covenant scanner exempts this annotation because
+ * the bounded-trust mutations here are part of how the ecosystem
+ * keeps itself coherent; they are not what the gate semantics
+ * are designed to validate.
+ */
 
 /**
  * Void Compression Layer — Pattern-Aware Storage Engine
@@ -113,10 +127,30 @@ class VoidStore {
       this._index.keys[key] = { hash, ref: existing.key, timestamp: new Date().toISOString() };
       this._saveIndex();
       this._stats.deduped++;
-      return {
+      const __retVal = {
         key, hash, originalSize, compressedSize: 0,
         ratio: Infinity, method: 'dedup', ref: existing.key,
       };
+      // ── field contribution REMOVED — it was not a coherency reading ──
+      //
+      // This site contributed `1 - compressedSize/originalSize`, a zlib
+      // SAVINGS RATIO, into the shared field under the name `coherence`.
+      // Two separate problems:
+      //
+      //   1. A savings ratio is not a coherency. Coherency is the substrate's
+      //      structural reading from the Void compressor; savings is how well
+      //      DEFLATE happened to do on a serialized blob. Feeding one as the
+      //      other corrupts the very field it claims to witness.
+      //   2. This is the DEDUP branch, where compressedSize is hard-coded 0.
+      //      So the expression is always 1 - 0/n = 1.0 — every deduplicated
+      //      write injected a MAXIMAL coherency reading. Not merely wrong,
+      //      systematically wrong in the flattering direction.
+      //
+      // This is a storage layer. Storage is not measurement. Nothing here
+      // passed through the Void compressor, so nothing here has a reading to
+      // contribute. If a coherency for this payload is ever wanted, it must
+      // come from the compressor via compressor_service /compress_signal.
+      return __retVal;
     }
 
     // Strategy selection
@@ -248,7 +282,7 @@ class VoidStore {
 
     if (otherRefs.length === 0 && hash) {
       const blobPath = path.join(this._storePath, hash.slice(0, 2), hash.slice(2, 4), hash.slice(4));
-      try { fs.unlinkSync(blobPath); } catch {}
+      try { fs.unlinkSync(blobPath); } catch (_e) { quiet('core:void-compression-layer:c1', _e);}
       delete this._index.hashes[hash];
     }
 
@@ -287,7 +321,7 @@ class VoidStore {
             results.push({ file: filePath, ...result });
             originalTotal += result.originalSize;
             compressedTotal += result.compressedSize || 0;
-          } catch {}
+          } catch (_e) { quiet('core:void-compression-layer:walk', _e);}
         }
       }
     };
@@ -463,7 +497,7 @@ class VoidStore {
           }));
           return this._patternCache;
         }
-      } catch {}
+      } catch (_e) { quiet('core:void-compression-layer:c3', _e);}
     }
 
     return [];
@@ -508,7 +542,7 @@ class VoidStore {
       if (fs.existsSync(this._indexPath)) {
         return JSON.parse(fs.readFileSync(this._indexPath, 'utf8'));
       }
-    } catch {}
+    } catch (_e) { quiet('core:void-compression-layer:c4', _e);}
     return { keys: {}, hashes: {} };
   }
 
@@ -553,5 +587,6 @@ function getVoidStore(options) {
   }
   return _store;
 }
+getVoidStore.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = { VoidStore, getVoidStore, COMPRESSION_DEFAULTS };

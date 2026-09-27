@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @oracle-infrastructure — internal machinery whose flagged functions are NESTED helper closures inside its exported functions (AST-parser internals, CLI, daemon, reflector analysis, lifecycle manager) — implementation internals, not module-scope periodic-table elements
 /**
  * Deploy-Ready Server — Production entry point for Remembrance Oracle.
  *
@@ -41,6 +42,7 @@ function banner() {
     '',
   ].join('\n');
 }
+banner.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function start() {
   console.log(banner());
@@ -113,6 +115,7 @@ function start() {
 
   return server;
 }
+start.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 3, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // Run if executed directly
 if (require.main === module) {

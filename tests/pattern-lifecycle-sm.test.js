@@ -8,7 +8,7 @@ const {
 } = require('../src/evolution/pattern-state-machine');
 
 // Minimal in-memory store mock for testing
-function createMockStore() {
+const createMockStore = () => {
   const patterns = new Map();
   const candidates = new Map();
   const archive = new Map();
@@ -122,7 +122,7 @@ function createMockStore() {
   };
 
   return store;
-}
+};
 
 describe('Pattern Lifecycle State Machine', () => {
   let store;

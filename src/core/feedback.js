@@ -1,3 +1,4 @@
+const { quiet } = require('./quiet');
 /**
  * Actionable Rejection Feedback — barrel re-export.
  *
@@ -9,13 +10,36 @@
 const { findPatternLocation, FIX_SUGGESTIONS, covenantFeedback } = require('./feedback-covenant');
 const { COHERENCY_ADVICE, coherencyFeedback } = require('./feedback-coherency');
 
+// FIELD: every validation is a reading. A pass contributes 1.0; a rejection
+// contributes the FRACTION of gates that still held, so the field records
+// how close the code came rather than a flat failure. Best-effort.
+function _contributeValidation(validationResult, passed) {
+  try {
+    let coherence = 1.0;
+    if (!passed) {
+      const gates = [
+        !(validationResult.covenantResult && !validationResult.covenantResult.sealed),
+        !(validationResult.coherencyScore && validationResult.coherencyScore.total < 0.6),
+        validationResult.testPassed !== false,
+      ];
+      coherence = gates.filter(Boolean).length / gates.length;
+    }
+    require('./field-coupling').contribute({
+      cost: 1.0, coherence, source: 'core:feedback:validation-gates',
+    });
+  } catch (_) { quiet('core:feedback:_contributeValidation', _); /* field optional */ }
+}
+_contributeValidation.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 9, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+
 function actionableFeedback(code, validationResult) {
   const result = { summary: '', covenantFeedback: [], coherencyFeedback: [], suggestions: [] };
 
   if (validationResult.valid) {
+    _contributeValidation(validationResult, true);
     result.summary = 'Code passed all checks.';
     return result;
   }
+  _contributeValidation(validationResult, false);
 
   const issues = [];
 
@@ -69,3 +93,9 @@ module.exports = {
   FIX_SUGGESTIONS,
   COHERENCY_ADVICE,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+actionableFeedback.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
+formatFeedback.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };

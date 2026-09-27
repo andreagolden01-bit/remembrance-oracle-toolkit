@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Remembrance Director — the conductor of the ecosystem.
@@ -261,9 +262,21 @@ class CoherencyDirector {
         // Override with the computed total since it includes legacy dimensions
         zone.coherency = score.total;
         zone.lastMeasured = Date.now();
-      } catch { /* skip unmeasurable zones */ }
+      } catch (_e) { quiet('orchestrator:coherency-director:coherencyFn', _e); /* skip unmeasurable zones */ }
     }
     this.field._updateGlobal();
+    // One measurement pass = one producer event, recorded as WORK.
+    // globalCoherency is an AVERAGE of zone coherencies — a fabricated
+    // number by the no-averaging law and not a compressor reading — so it
+    // left the coherence channel (provenance purge 2026-08-09). The zones'
+    // own readings enter the field where they are measured.
+    try {
+      require('../core/field-coupling').recordCost({
+        units: this.field.size || 1,
+        kind: 'work',
+        source: 'orchestrate',
+      });
+    } catch (_) { quiet('orchestrator:coherency-director:require', _); /* best-effort — never break a measurement pass */ }
   }
 
   /**
@@ -289,7 +302,7 @@ class CoherencyDirector {
             this.field.updateZoneFromVoid(zone.id, voidVal);
           }
         }
-      } catch { /* void compressor unavailable — skip */ }
+      } catch (_e) { quiet('orchestrator:coherency-director:registerVoidSignal', _e); /* void compressor unavailable — skip */ }
     }
   }
 
@@ -322,7 +335,7 @@ class CoherencyDirector {
           targetCoherence: this.preservationThreshold,
         });
       }
-    } catch { /* healing module unavailable */ }
+    } catch (_e) { quiet('orchestrator:coherency-director:heal', _e); /* healing module unavailable */ }
 
     // If healing produced code, re-measure
     if (result && result.code) {
@@ -341,7 +354,7 @@ class CoherencyDirector {
           const table = new PeriodicTable({ storagePath: tablePath });
           const props = extractAtomicProperties(result.code);
           table.addElement(props, { name: `healed/${zoneId}`, source: 'orchestrator' });
-        } catch { /* atomic module unavailable */ }
+        } catch (_e) { quiet('orchestrator:coherency-director:extractAtomicProperties', _e); /* atomic module unavailable */ }
 
         const intervention = {
           type: 'heal', zone: zoneId, before, after,
@@ -358,7 +371,7 @@ class CoherencyDirector {
         this.field._updateGlobal();
 
         return intervention;
-      } catch { /* re-measurement failed */ }
+      } catch (_e) { quiet('orchestrator:coherency-director:extractAtomicProperties', _e); /* re-measurement failed */ }
     }
     return null;
   }
@@ -371,7 +384,22 @@ class CoherencyDirector {
    *   4. Check if emergence thresholds are crossed
    *   5. Return the field state
    */
+  /**
+   * Closed-loop entropy relaxation. Delegates to the entropy-relaxer
+   * module: when the shared Remembrance Field is hot, it runs the
+   * resonance detector and injects the discovered coherence to relax
+   * globalEntropy. Best-effort and never-throw.
+   */
+  async relaxIfHot(opts) {
+    const { relaxIfHot } = require('./entropy-relaxer');
+    return relaxIfHot(opts);
+  }
+
   async runCycle() {
+    // 0. Throttle up if the field is hot — auto-relax the shared field
+    //    before doing more work. Best-effort; never breaks the cycle.
+    await this.relaxIfHot().catch(() => {});
+
     // 1. Measure
     this.measureWithOracle();
     this.measureWithVoid();
@@ -392,7 +420,7 @@ class CoherencyDirector {
       const { LivingCovenant } = require('../core/living-covenant');
       const living = new LivingCovenant();
       covenantEvolution = living.evolve(this.field.globalCoherency);
-    } catch { /* living covenant not available */ }
+    } catch (_e) { quiet('orchestrator:coherency-director:require', _e); /* living covenant not available */ }
 
     // 4b. Check emergence — both absolute thresholds AND improvement deltas
     let emerged = [];
@@ -407,7 +435,7 @@ class CoherencyDirector {
         previousCoherence: prevCoherence,
         deltaThreshold: 0.03,
       });
-    } catch { /* atomic module unavailable */ }
+    } catch (_e) { quiet('orchestrator:coherency-director:require', _e); /* atomic module unavailable */ }
 
     return {
       field: this.field.stats(),
@@ -417,6 +445,124 @@ class CoherencyDirector {
       emerged: emerged.length,
       covenantEvolution,
       globalCoherency: this.field.globalCoherency,
+    };
+  }
+
+  /**
+   * The orchestrator's authoritative ruling — the final voice on how
+   * coherency should flow and what should be fixed next.
+   *
+   * Read-only: it measures and decides but heals nothing. Whoever asks
+   * the field "what next?" gets this verdict, and it is final.
+   *
+   * @param {Array} [items] zones to scan ({id,code,filePath,language});
+   *   if omitted, rules on whatever zones were already scanned.
+   * @returns {object} { globalCoherency, zones, flow, fixNext, healingBudget, verdict }
+   */
+  ruling(items) {
+    const { rankZones, computeHealingBudget } = require('./priority-engine');
+    if (Array.isArray(items) && items.length) this.scan(items);
+    this.measureWithOracle();
+    this.field.computeGradients();
+
+    const stats  = this.field.stats();
+    const queue  = rankZones(this.field, { maxResults: 5 });
+    const budget = computeHealingBudget(this.field);
+    const lowest = this.field.findLowestZone();
+
+    // Community baseline — the Remembrance Field's collective coherence,
+    // the coherence the whole producer community has settled on. Every
+    // item the orchestrator reports is scored against it: at or above
+    // the baseline = the community backs it (1.0), far below = low.
+    // The field gives two independent readings — coherency (the level)
+    // and entropy (the disorder). They are kept separate so the entropy
+    // signal is never drowned out by the coherency one.
+    let baseline = 1.0;
+    let fieldEntropy = null;
+    let cascadeFactor = null;
+    try {
+      const fieldState = require('../core/field-coupling').peekField();
+      if (fieldState) {
+        if (typeof fieldState.coherence === 'number' && fieldState.coherence > 0) {
+          baseline = fieldState.coherence;
+        }
+        if (typeof fieldState.globalEntropy === 'number') fieldEntropy = fieldState.globalEntropy;
+        if (typeof fieldState.cascadeFactor === 'number') cascadeFactor = fieldState.cascadeFactor;
+      }
+    } catch (_) { quiet('orchestrator:coherency-director:require', _); /* field unreachable — readings degrade to null / 1.0 */ }
+    const community = (c) => (typeof c === 'number' && baseline > 0)
+      ? Math.round(Math.min(1, c / baseline) * 1000) / 1000
+      : null;
+
+    // zoneSpread — the orchestrator's own entropy reading: how widely
+    // zone coherency is dispersed (stddev), independent of the mean.
+    const measured = Array.from(this.field.zones.values()).filter(z => z.lastMeasured);
+    const variance = measured.length > 1
+      ? measured.reduce((s, z) => s + (z.coherency - stats.globalCoherency) ** 2, 0) / measured.length
+      : 0;
+    const zoneSpread = Math.round(Math.sqrt(variance) * 1000) / 1000;
+
+    const topZone   = queue[0] ? this.field.getZone(queue[0].zoneId) : null;
+    const rootCause = topZone ? this.categorizeRootCause(topZone) : null;
+
+    // Every fix-next zone carries its community score — coherency
+    // measured against the field's collective baseline.
+    const rankedQueue = queue.map(z => ({ ...z, communityScore: community(z.coherency) }));
+
+    // FLOW: coherency rises fastest when the lowest zone is lifted —
+    // that is the direction the orchestrator points intervention.
+    const flow = lowest ? {
+      toward: lowest.id,
+      atCoherency: Math.round(lowest.coherency * 1000) / 1000,
+      communityScore: community(lowest.coherency),
+      direction: 'coherency flows up from the lowest zone — intervene there first',
+    } : null;
+
+    // FIX NEXT: the priority-ranked queue is the orchestrator's word.
+    const fixNext = rankedQueue.length ? {
+      zone: rankedQueue[0].zoneId,
+      coherency: rankedQueue[0].coherency,
+      priority: rankedQueue[0].priority,
+      communityScore: rankedQueue[0].communityScore,
+      reason: rankedQueue[0].reason,
+      rootCause,
+      queue: rankedQueue,
+    } : null;
+
+    // Two separate readings — coherency (the level) and entropy (the
+    // disorder) — reported side by side so neither is subordinate.
+    const coherency = {
+      global: stats.globalCoherency,
+      community: community(stats.globalCoherency),
+      baseline: Math.round(baseline * 1000) / 1000,
+    };
+    const entropy = {
+      zoneSpread,
+      field: fieldEntropy === null ? null : Math.round(fieldEntropy * 1000) / 1000,
+      cascadeFactor: cascadeFactor === null ? null : Math.round(cascadeFactor * 1000) / 1000,
+    };
+
+    const readings = `coherency ${coherency.global} (community ${coherency.community}) · `
+      + `entropy ${zoneSpread} spread${entropy.field === null ? '' : `, field ${entropy.field}`}`;
+    const verdict = fixNext
+      ? `${readings} · ${stats.needsHealing} zone(s) below threshold. `
+        + `Fix next: ${fixNext.zone} — ${rootCause ? rootCause.suggestedAction : 'heal'}. `
+        + `Healing budget: ${budget.budget}.`
+      : `${readings} · all ${stats.measuredZones} measured zones stable — nothing to fix.`;
+
+    return {
+      coherency,
+      entropy,
+      zones: {
+        total: stats.totalZones,
+        measured: stats.measuredZones,
+        needHealing: stats.needsHealing,
+        stable: stats.stable,
+      },
+      flow,
+      fixNext,
+      healingBudget: budget,
+      verdict,
     };
   }
 
@@ -542,7 +688,7 @@ class CoherencyDirector {
     try {
       const { synthesizeTestStubs } = require('../orchestrator/test-synthesizer');
       testCode = synthesizeTestStubs(zone.data.code, zone.data.filePath);
-    } catch { /* synthesis module unavailable */ }
+    } catch (_e) { quiet('orchestrator:coherency-director:synthesizeTestStubs', _e); /* synthesis module unavailable */ }
 
     if (!testCode) {
       const intervention = {
@@ -599,6 +745,7 @@ function _getEmergentCoherency() {
     return getEmergentCoherency();
   } catch { return null; }
 }
+_getEmergentCoherency.atomicProperties = { charge: 0, valence: 1, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 9, period: 2, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 module.exports = {
   CoherencyDirector,

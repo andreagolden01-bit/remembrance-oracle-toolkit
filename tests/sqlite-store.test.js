@@ -13,13 +13,13 @@ if (!DatabaseSync) {
 
 let store, tmpDir;
 
-function freshStore() {
+const freshStore = () => {
   tmpDir = makeTempDir('sqlite-store');
   store = new SQLiteStore(tmpDir);
   return store;
-}
+};
 
-function makeEntry(overrides = {}) {
+const makeEntry = (overrides = {}) => {
   return {
     code: overrides.code || 'function add(a, b) { return a + b; }',
     language: overrides.language || 'javascript',
@@ -30,9 +30,9 @@ function makeEntry(overrides = {}) {
     testPassed: overrides.testPassed ?? true,
     testOutput: overrides.testOutput || 'ok',
   };
-}
+};
 
-function makePatternObj(overrides = {}) {
+const makePatternObj = (overrides = {}) => {
   return {
     name: overrides.name || 'test-pattern',
     code: overrides.code || 'function mul(a, b) { return a * b; }',
@@ -47,9 +47,9 @@ function makePatternObj(overrides = {}) {
     requires: overrides.requires || [],
     composedOf: overrides.composedOf || [],
   };
-}
+};
 
-function makeCandidateObj(overrides = {}) {
+const makeCandidateObj = (overrides = {}) => {
   return {
     name: overrides.name || 'candidate-one',
     code: overrides.code || 'function sub(a, b) { return a - b; }',
@@ -63,7 +63,7 @@ function makeCandidateObj(overrides = {}) {
     parentPattern: overrides.parentPattern || null,
     generationMethod: overrides.generationMethod || 'variant',
   };
-}
+};
 
 describe('SQLiteStore', () => {
   beforeEach(() => freshStore());

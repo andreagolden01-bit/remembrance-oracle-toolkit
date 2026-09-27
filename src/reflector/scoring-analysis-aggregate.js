@@ -1,3 +1,4 @@
+// @oracle-infrastructure — internal machinery whose flagged functions are NESTED helper closures inside its exported functions (AST-parser internals, CLI, daemon, reflector analysis, lifecycle manager) — implementation internals, not module-scope periodic-table elements
 /**
  * Reflector — Aggregate scoring: deepScore, repoScore, formatDeepScore.
  */
@@ -10,6 +11,7 @@ function detectLanguage(code) {
   if (!_detectLanguage) _detectLanguage = require('../unified/coherency').detectLanguage;
   return _detectLanguage(code);
 }
+detectLanguage.atomicProperties = { charge: 0, valence: 1, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 const { observeCoherence } = require('../core/reflection');
 const { covenantCheck } = require('../core/covenant');
 const { calculateCyclomaticComplexity, analyzeCommentDensity, analyzeNestingDepth, computeQualityMetrics, extractFunctionBodies } = require('./scoring-analysis-complexity');
@@ -48,7 +50,7 @@ function deepScore(code, options = {}) {
     nesting.score * weights.nesting +
     quality.score * weights.quality;
 
-  return {
+  const __retVal = {
     language,
     aggregate: Math.round(aggregate * 1000) / 1000,
     serfCoherence: Math.round(observation.composite * 1000) / 1000,
@@ -61,7 +63,12 @@ function deepScore(code, options = {}) {
     covenantSealed: covenant.sealed,
     weights,
   };
+  // field contribution removed: contributed score, not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
+deepScore.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 18, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 function repoScore(rootDir, config = {}) {
   const { scanDirectory, DEFAULT_CONFIG } = getMulti();
@@ -110,6 +117,7 @@ function repoScore(rootDir, config = {}) {
     files: fileScores,
   };
 }
+repoScore.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function formatDeepScore(result) {
   const lines = [];
@@ -131,6 +139,7 @@ function formatDeepScore(result) {
   }
   return lines.join('\n');
 }
+formatDeepScore.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Cross-file analysis — detects structural issues across files that
@@ -282,5 +291,6 @@ function crossFileAnalysis(rootDir, fileScores, codeCache) {
     findings,
   };
 }
+crossFileAnalysis.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 3, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = { deepScore, repoScore, formatDeepScore, crossFileAnalysis };

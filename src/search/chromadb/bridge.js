@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../../core/quiet');
 
 /**
  * ChromaDB Bridge — Node.js interface to the Python ChromaDB search engine.
@@ -165,7 +166,7 @@ class ChromaDBBridge {
               const result = JSON.parse(stdout.trim());
               resolve(result);
               return;
-            } catch (e) {
+            } catch (e) { quiet('search:chromadb:bridge:resolve', e);
               // Fall through to error handling
             }
           }
@@ -195,6 +196,7 @@ function _sanitizeTag(tag) {
   if (typeof tag !== 'string') return String(tag || '');
   return tag.replace(/\.\.\//g, '').replace(/[/\\]/g, '-').replace(/[\x00-\x1f]/g, '').trim();
 }
+_sanitizeTag.atomicProperties = { charge: -1, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Parse tags from various formats (string, JSON string, array).
@@ -205,12 +207,13 @@ function _parseTags(tags) {
     try {
       const parsed = JSON.parse(tags);
       if (Array.isArray(parsed)) return parsed.map(t => _sanitizeTag(t));
-    } catch {
+    } catch (_e) { quiet('search:chromadb:bridge:_parseTags', _e);
       // comma-separated fallback
     }
     return tags.split(',').map(t => _sanitizeTag(t.trim())).filter(Boolean);
   }
   return [];
 }
+_parseTags.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = { ChromaDBBridge };

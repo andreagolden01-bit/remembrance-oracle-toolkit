@@ -1,3 +1,4 @@
+const { rmFixture } = require('./helpers');
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('http');
@@ -9,7 +10,7 @@ const { RemembranceOracle } = require('../src/api/oracle');
 
 // ─── HTTP helpers ───
 
-function httpGet(url) {
+const httpGet = (url) => {
   return new Promise((resolve, reject) => {
     http.get(url, (res) => {
       let data = '';
@@ -17,9 +18,9 @@ function httpGet(url) {
       res.on('end', () => resolve({ status: res.statusCode, data, headers: res.headers }));
     }).on('error', reject);
   });
-}
+};
 
-function httpPost(url, body) {
+const httpPost = (url, body) => {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const payload = JSON.stringify(body);
@@ -38,7 +39,7 @@ function httpPost(url, body) {
     req.write(payload);
     req.end();
   });
-}
+};
 
 // ─── getDashboardHTML() unit tests ───
 
@@ -156,7 +157,7 @@ describe('Dashboard server — existing endpoints', () => {
       if (server.wsServer) server.wsServer.close?.();
       server.close();
     }
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('serves HTML dashboard at /', async () => {
@@ -231,7 +232,7 @@ describe('Dashboard server — debug endpoints', () => {
       if (server.wsServer) server.wsServer.close?.();
       server.close();
     }
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('GET /api/debug/stats returns debug statistics', async () => {
@@ -274,7 +275,7 @@ describe('Dashboard server — teams endpoints', () => {
       if (server.wsServer) server.wsServer.close?.();
       server.close();
     }
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('GET /api/teams returns array', async () => {

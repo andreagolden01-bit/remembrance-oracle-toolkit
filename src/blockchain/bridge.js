@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Blockchain Bridge — connects oracle-toolkit to REMEMBRANCE-BLOCKCHAIN.
  * Resolves the blockchain publisher from multiple possible locations.
@@ -36,7 +37,7 @@ function resolveBlockchainRoot() {
       if (fs.existsSync(publisherPath) || fs.existsSync(publisherPath + '.js')) {
         return candidate;
       }
-    } catch (_) {
+    } catch (_) { quiet('blockchain:bridge:resolveBlockchainRoot', _);
       // skip inaccessible paths
     }
   }
@@ -95,3 +96,10 @@ async function publishPattern(pattern, options = {}) {
 }
 
 module.exports = { resolveBlockchainRoot, getPublisher, publishPattern };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+resolveBlockchainRoot.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getPublisher.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 2, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+publishPattern.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

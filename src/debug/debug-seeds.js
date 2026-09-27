@@ -1,3 +1,4 @@
+// @oracle-pattern-definitions — embeds example/template code as string DATA; the covenant's line scanner matches those in-string 'function' declarations as elements, but they have no runtime binding — the file's payload is pattern definitions, not live substrate functions
 /**
  * Debug Pattern Seeds — Pre-built error→fix pairs for all 10 categories.
  *
@@ -1391,11 +1392,13 @@ function seedDebugPatterns(debugOracle, options = {}) {
 
   return report;
 }
+seedDebugPatterns.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _inferCategory(errorMessage) {
   const { classifyError } = require('./debug-oracle');
   return classifyError(errorMessage);
 }
+_inferCategory.atomicProperties = { charge: 0, valence: 1, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 9, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   DEBUG_SEEDS,

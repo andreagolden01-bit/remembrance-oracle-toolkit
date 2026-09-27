@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Auto-Register Module — Diff-targeted pattern registration.
  *
@@ -61,6 +62,7 @@ function getChangedFiles(cwd, range = 'HEAD~1..HEAD') {
     return [];
   }
 }
+getChangedFiles.atomicProperties = { charge: -1, valence: 0, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 0, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Get added lines from a git diff for a specific file.
@@ -91,6 +93,7 @@ function getAddedCode(cwd, file, range = 'HEAD~1..HEAD') {
     return '';
   }
 }
+getAddedCode.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 0, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Find the test file for a given source file.
@@ -138,6 +141,7 @@ function findTestFile(sourceFile, baseDir) {
 
   return null;
 }
+findTestFile.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Check if a function name is already registered as a pattern.
@@ -164,6 +168,7 @@ function isRegistered(oracle, name) {
     return false;
   }
 }
+isRegistered.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Extract registerable functions from a source file.
@@ -192,6 +197,7 @@ function extractFunctions(code, language, newFunctionNames) {
     return true;
   });
 }
+extractFunctions.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Generic single-word names that don't describe reusable patterns.
@@ -222,6 +228,7 @@ function splitNameParts(name) {
   }
   return parts;
 }
+splitNameParts.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Score a harvested function on a 0-1 quality scale.
@@ -255,7 +262,7 @@ function _qualityScore(func, filePath, baseDir) {
   let fileContent = '';
   try {
     fileContent = fs.readFileSync(filePath, 'utf-8');
-  } catch (e) {
+  } catch (e) { quiet('ci:auto-register:findTestFile', e);
     // If we can't read the file, skip this check
   }
 
@@ -356,6 +363,7 @@ function _qualityScore(func, filePath, baseDir) {
 
   return { score, reasons };
 }
+_qualityScore.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 0, group: 3, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Build pattern tags from function name, file path, and language.
@@ -375,6 +383,7 @@ function buildTags(name, filePath, language, functionNames) {
 
   return tags;
 }
+buildTags.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Auto-register new functions from the latest commit as Oracle patterns.
@@ -646,6 +655,7 @@ function autoRegister(oracle, cwd, options = {}) {
   _registeredNamesCache = null;
   return report;
 }
+autoRegister.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "odd", phase: "solid", reactivity: "high", electronegativity: 0, group: 3, period: 5, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   autoRegister,

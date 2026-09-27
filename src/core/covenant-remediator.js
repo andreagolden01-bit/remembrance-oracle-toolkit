@@ -39,12 +39,7 @@ function remediateFile(filePath) {
   fs.writeFileSync(filePath, current);
   return { changed: true, applied, filePath };
 }
-remediateFile.atomicProperties = {
-  charge: 1, valence: 2, mass: 'medium', spin: 'odd', phase: 'liquid',
-  reactivity: 'reactive', electronegativity: 0.8, group: 11, period: 5,
-  harmPotential: 'minimal', alignment: 'healing', intention: 'benevolent',
-  domain: 'covenant',
-};
+remediateFile.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function remediatePaths(paths) {
   const results = [];
@@ -61,3 +56,8 @@ if (require.main === module) {
 }
 
 module.exports = { remediateFile, remediatePaths, REMEDIATORS };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+remediatePaths.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

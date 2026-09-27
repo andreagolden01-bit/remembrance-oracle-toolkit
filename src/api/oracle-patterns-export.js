@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Oracle Patterns — Diff, import, and export.
  */
@@ -26,17 +27,54 @@ module.exports = {
     while (i < linesA.length) { diffLines.push({ type: 'removed', line: linesA[i++] }); }
     while (j < linesB.length) { diffLines.push({ type: 'added', line: linesB[j++] }); }
 
-    return {
+    const __retVal = {
       a: { id: idA, name: a.name || a.description || idA, language: a.language, coherency: a.coherencyScore?.total ?? '?' },
       b: { id: idB, name: b.name || b.description || idB, language: b.language, coherency: b.coherencyScore?.total ?? '?' },
       diff: diffLines,
       stats: { added: diffLines.filter(d => d.type === 'added').length, removed: diffLines.filter(d => d.type === 'removed').length, same: diffLines.filter(d => d.type === 'same').length },
     };
+    // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:oracle-patterns-export:diff' });
+        break;
+      } catch (_) { quiet('api:oracle-patterns-export:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('api:oracle-patterns-export:__recordCost', _); /* best-effort */ }
+    return __retVal;
   },
 
   export(options = {}) {
     const { format = 'json', limit = 20, minCoherency = 0.5, language, tags } = options;
     let patterns = this.patterns.getAll({ language, minCoherency });
+
+    // Union in proven submitted entries that carry a test. Submitted code lives
+    // in the `entries` table (not the `patterns` table that getAll reads), so a
+    // proven entry's auto-generated testCode would otherwise never reach the
+    // export. Only entries with an actual testCode are included, and only when
+    // no exported pattern already covers the same code — so this travels the
+    // proven test into patterns.json without duplicating registered patterns.
+    try {
+      const seenCode = new Set(patterns.map(p => p.code));
+      const entries = (this.store.getAll ? this.store.getAll({ language, minCoherency }) : [])
+        .filter(e => typeof e.testCode === 'string' && e.testCode.trim() && !seenCode.has(e.code));
+      for (const e of entries) {
+        patterns.push({
+          id: e.id, name: e.description || e.id, code: e.code, testCode: e.testCode,
+          language: e.language, description: e.description, tags: e.tags || [],
+          coherencyScore: e.coherencyScore,
+          usageCount: e.reliability?.timesUsed ?? 0, successCount: e.reliability?.timesSucceeded ?? 0,
+          createdAt: e.createdAt, updatedAt: e.updatedAt,
+        });
+      }
+    } catch (err) {
+      if (process.env.ORACLE_DEBUG) console.warn('[oracle:export] entry union failed:', err?.message || err);
+    }
+
     if (tags && tags.length > 0) {
       const filterTags = new Set(tags.map(t => t.toLowerCase()));
       patterns = patterns.filter(p => (p.tags || []).some(t => filterTags.has(t.toLowerCase())));

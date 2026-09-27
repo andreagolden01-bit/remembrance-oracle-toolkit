@@ -6,6 +6,57 @@
  */
 
 const TOOLS = [
+  // ─── 0. GOGGLES — the one surface ───
+  //
+  // The other 28 tools here are individual organs. The goggles is the
+  // instrument: it already routes every canonical operation across the
+  // ecosystem, so an agent that has this tool does not need to know where
+  // any operation physically lives, which repo owns it, or what it is
+  // called. Reading and DRIVING the substrate are the same tool.
+  //
+  // It was the one thing this server did not expose.
+  {
+    name: 'goggles',
+    description:
+      'The Remembrance goggles — the single surface for reading AND driving the substrate. '
+      + 'READ modes: `read` goggles a file (TRAPS recorded for that area, canonical/superseded status, '
+      + 'FOCUS intrinsic structural coherence, META pattern resonance with nearest ecosystem siblings '
+      + 'and the callable functions in them, MACRO placement in the repo map, META-DEBUG audit findings, '
+      + 'and Δ since the last read); `map` compresses a whole repo into a coherency map (substrate-native '
+      + '— seconds, nothing re-encoded — and names the files the substrate has not witnessed yet); '
+      + '`diff` re-reads everything changed vs HEAD; `brief` gives the full debrief BEFORE you call '
+      + 'something (recorded traps for the area, whether the file is the live version, what its body '
+      + 'ACTUALLY does with its input read from the body rather than the name, and whether the services '
+      + 'it needs are up). DRIVE mode: `do` runs a substrate operation routed to its canonical script — '
+      + 'field (peek the Living Remembrance state), drift, harvest, absorb, publish, coin, export, verify. '
+      + 'Reading auto-ingests by default (looking witnesses); pass ingest:false to read without growing '
+      + 'the substrate. Coherence measures STRUCTURE, never correctness — a well-formed wrong answer '
+      + 'scores high.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['read', 'map', 'diff', 'brief', 'do'],
+          description: 'read = goggle a file · map = whole-repo coherency map · diff = everything changed vs HEAD · brief = full debrief before calling something · do = run a substrate operation',
+        },
+        target: {
+          type: 'string',
+          description: 'read/brief: file path or symbol. map: repo directory (default cwd). do: argument for the verb (e.g. a repo name for drift/harvest, a path for export).',
+        },
+        verb: {
+          type: 'string',
+          enum: ['field', 'drift', 'harvest', 'absorb', 'publish', 'coin', 'export', 'verify'],
+          description: 'do mode only: which substrate operation to run.',
+        },
+        lines: { type: 'string', description: 'read: restrict FOCUS to a line range, "A:B".' },
+        deep: { type: 'boolean', description: 'map: force the live re-encode path (un-ingested repos, or to add per-file intrinsic coherence).' },
+        ingest: { type: 'boolean', description: 'read: witness this file into the substrate. Default true — looking witnesses.' },
+      },
+      required: ['mode'],
+    },
+  },
+
   // ─── 1. Search (unified: search + smart_search + query) ───
   {
     name: 'oracle_search',
@@ -412,6 +463,74 @@ const TOOLS = [
     },
   },
 
+  // ─── 28. Remembrance Field (LRE) — the conserved ecosystem field, one tool ───
+  {
+    name: 'field',
+    description: 'The Remembrance Field — the LivingRemembranceEngine conserved scalar that every producer across the ecosystem contributes to. One tool, dispatched by `action`: state (default) recalls the field — coherence, coherenceIntegral, globalEntropy, cascadeFactor, updateCount, and the per-source histogram; contribute participates as a producer (pass cost, coherence, source); validate is the signal-validity oracle — classify a candidate contribution (or batch via coherence:number[]) against the rolling baseline of recent activity and return {accepted, shapeClass, suspect, projected, ...} without committing unless commit:true is passed. The shape classes (constant-displaced, narrow-band-displaced, constant-aligned, narrow-band-aligned, bimodal, wide-uniform, natural-high/low/mid, learned-natural) reproduce the empirically-measured response of the field engine to malformed input shapes (H3 — see docs/EXPERIMENT_TEMPORAL_AND_FIFTH_FAMILY.md). The variance gate is itself growable: when a contribution\'s shape signature passes both oracles and gets absorbed by the covenant, its (mean, variance, n) signature is recorded; future structurally similar contributions classify as `learned-natural` and bypass the H3-default narrow-band/constant rejection. Same ratchet discipline as the covenant — only verified material teaches. The "displaced" variants are how synthetic / fabricated readings show up before they reach the engine. pressure returns the field-driven backpressure signal (hot when entropy/cascade saturate); pressure-release takes a snapshot and detects whether a release event just occurred since the last call — when the substrate was holding cascade tension and a contribution relieved it. record-cost contributes pure work/money/energy under the entropy side without claiming a coherency benefit; record-benefit contributes a coherency-positive outcome (verified pattern, healed file, passed audit) under the coherency side; the engine\'s master equation `entropy = cost / (coherence + ε)` auto-balances the two so the covenant aim — always raise net coherency — is enforced by the field\'s own dynamics. record-meta-observation aggregates a trajectory of scores, classifies it via the dual oracle, and contributes the classification back as a structured meta:* observation — making "the substrate measured my work" a normal recorded type of contribution. consensus-histogram returns counts/ratios of the four absorption outcomes (both-accept / both-reject / A-yes-B-no / A-no-B-yes) over a recent window — read it as the environmental sensor for what kind of pressure the substrate is under (adversarial vs degraded supply vs healthy growth). cognition-trajectory reads the field-goggles persistent buffer to report the working agent\'s session signature (n, mean, variance, shapeClass). learned-shapes returns the variance-gate\'s learned signatures grouped by source-prefix domain. direction returns a verdict over a recent snapshot window — healing / degrading / saturating / relaxing / steady / gaining-coherence / losing-coherence / mixed — derived from the (coherence, entropy, cascade) delta vector. temporal-snapshot walks a file\'s git history and contributes adjacent + arc fractal coherency as temporal:* sources — continuous self-measurement of any file\'s structural stability across revisions. introspect returns the per-source histogram sorted by count, for finding silent-but-plumbed sources; sources-diff takes expected source labels and returns which are firing vs silent; checkpoint commits the field state to the blockchain (L2 ledger + Solana + Cosmos anchors); audit runs a coherence-gated ecosystem audit on a file or code target — the current field coherence selects the depth (below 0.65 = full audit: audit/lint/smell/covenant signals plus a reflection heal pass; at or above 0.65 = fast scan: coherency + risk only), and the audit work-cost is balanced back into the field so heavy audits raise globalEntropy and trip the field backpressure, and a file audit ends with the orchestrator ruling for the directory the audited file lives in; direct asks the coherency orchestrator for its authoritative ruling — the final voice on how coherency should flow and what should be fixed next: separate coherency and entropy readings, the flow direction, the priority-ranked fix-next queue with root cause, and the healing budget — every item carrying a community score, its coherency measured against the collective field coherence; offload posts a unit of work (kind + payload) to the shared work-queue and waits for the coherency-judged result — a cool node computes it at once, a hot node sends it to the pool; relax is the throttle-up entropy relaxation: when the field is hot, it runs the resonance detector and injects its discovered coherence to relax globalEntropy (best-effort — returns triggered:false when the field is not hot, on cooldown, or the detector is unreachable). contribute, checkpoint, audit, direct, offload, and relax change the field; validate is non-mutating unless commit:true; the read actions leave its state unchanged but still witness it (records-on-read snapshots), so none is strictly side-effect-free.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        action: { type: 'string', enum: ['state', 'contribute', 'validate', 'pressure', 'pressure-release', 'record-cost', 'record-benefit', 'record-meta-observation', 'consensus-histogram', 'cognition-trajectory', 'learned-shapes', 'direction', 'temporal-snapshot', 'reflexes', 'gate-mode', 'methods', 'respond', 'introspect', 'sources-diff', 'checkpoint', 'audit', 'direct', 'offload', 'relax'], description: 'Field operation. Default: state — recall the field.' },
+        includeSources: { type: 'boolean', description: 'state/checkpoint: include the per-source histogram (state defaults true, checkpoint defaults false).' },
+        cost: { type: 'number', description: 'contribute / validate / record-benefit: work units consumed (default: 1).' },
+        coherence: { description: 'contribute / record-benefit: alignment score (number, 0..1). validate: number for a single candidate, or number[] for a batch — the shape of the array is what is classified.' },
+        source: { type: 'string', description: 'contribute / validate / record-cost / record-benefit / record-meta-observation: caller identity, e.g. "agent:claude:my-task".' },
+        commit: { type: 'boolean', description: 'validate: when true, write the candidate(s) to the field if the verdict is accepted. Default false (validate is non-mutating).' },
+        units: { type: 'number', description: 'record-cost: work units spent — compute time, money, energy, swarm runs. Raises entropy without claiming coherency benefit.' },
+        kind: { type: 'string', description: 'record-cost: optional kind tag used to construct a default source label, e.g. "compute", "money", "swarm-run". Default "work".' },
+        scores: { type: 'array', items: { type: 'number' }, description: 'record-meta-observation: per-edit/per-measurement coherency readings. The trajectory shape gets classified via the dual oracle and contributed as a meta:* source.' },
+        sessionId: { type: 'string', description: 'record-meta-observation: optional session id appended to the meta-source label.' },
+        windowN: { type: 'number', description: 'consensus-histogram / direction: how many recent decisions / snapshots to aggregate. consensus-histogram default = all; direction default = 5.' },
+        statePath: { type: 'string', description: 'cognition-trajectory: override the default ~/.claude/.field-goggles-state.json path.' },
+        repoDir: { type: 'string', description: 'temporal-snapshot: absolute path to the git repo whose file you want to measure.' },
+        filePath: { type: 'string', description: 'temporal-snapshot: path to the file (relative to repoDir) whose history will be walked.' },
+        maxVersions: { type: 'number', description: 'temporal-snapshot: cap on history depth (default 12).' },
+        name: { type: 'string', description: 'methods: when set, return only the named method descriptor (with triggers, effect, cost, reversibility).' },
+        entropyThreshold: { type: 'number', description: 'pressure: hot when globalEntropy exceeds this (default: 10).' },
+        cascadeThreshold: { type: 'number', description: 'pressure: hot when cascadeFactor exceeds this (default: 4).' },
+        topN: { type: 'number', description: 'introspect: return the top-N most-active sources (default: 25, 0 = all).' },
+        prefix: { type: 'string', description: 'introspect: filter sources by prefix, e.g. "void:".' },
+        expected: { type: 'array', items: { type: 'string' }, description: 'sources-diff: the source labels to check (required for that action).' },
+        file: { type: 'string', description: 'audit: path to the file to audit.' },
+        code: { type: 'string', description: 'audit: inline source to audit (alternative to file).' },
+        language: { type: 'string', description: 'audit: language hint (auto-detected from the file path if omitted).' },
+        dir: { type: 'string', description: 'direct: directory scanned as coherency zones (default: src).' },
+        kind: { type: 'string', description: 'offload: the work kind — an executor must be registered for it (e.g. audit, echo).' },
+        payload: { description: 'offload: the work input passed to the executor.' },
+        timeoutMs: { type: 'number', description: 'offload: how long to wait for a result before returning a timeout (default: 30000).' },
+      },
+      required: [],
+    },
+  },
+
+  // ─── 27. Ecosystem Orient (cross-repo protocol on connect) ───
+  {
+    name: 'ecosystem_orient',
+    description: 'Returns the canonical Remembrance 12-repo ecosystem protocol (ECOSYSTEM.md) plus the required per-change workflow checklist (audit → reflect → covenant → swarm → substrate → ledger). Any MCP-using agent SHOULD call this once at session start, before making code changes. Read-only; no side effects.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        format: { type: 'string', enum: ['full', 'checklist', 'topology'], description: 'full (default) = whole ECOSYSTEM.md, checklist = just the §2 workflow, topology = just the §1 repo table' },
+      },
+      required: [],
+    },
+  },
+
+  // ─── Audit a repository by URL or path (the client-audit surface) ───
+  {
+    name: 'oracle_audit_repo',
+    description: 'Audit any repository by git URL or local path: deep coherency map (structure distribution, orphans/duplicates via the shared pairwise engine, cross-system bridges) plus the correctness checkers (per-finding line + fix). Git URLs are cloned --depth 1 to a temp dir and removed afterwards. Confidential by construction: audited code never grows the substrate.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        target: { type: 'string', description: 'Git URL (https://.../repo.git) or local directory path' },
+        maxCheckerFiles: { type: 'number', description: 'Cap on files run through the correctness checkers (default: 400)' },
+        maxFindings: { type: 'number', description: 'Cap on findings returned (default: 60)' },
+      },
+      required: ['target'],
+    },
+  },
+
   // ─── 26. Meditate (auto-improvement loop, single tick) ───
   {
     name: 'oracle_meditate',
@@ -427,4 +546,18 @@ const TOOLS = [
   },
 ];
 
+/**
+ * The full catalog. EXPOSURE is decided by the server, not here.
+ *
+ * The MCP surface is deliberately narrowed to the goggles — see
+ * ADVERTISED in src/mcp/server.js. That filter lives there because this
+ * module's job is to DEFINE tools; deciding which are advertised is a
+ * server concern.
+ *
+ * Filtering the export here instead broke 24 test suites at once: they
+ * introspect this list to assert a tool exists, and in-process callers
+ * (oracle-llm, sqlite, providers, swarm-diagnose) resolve handlers through
+ * it. Narrowing a definition list to express a presentation choice made
+ * every consumer of the definition see the presentation.
+ */
 module.exports = { TOOLS };

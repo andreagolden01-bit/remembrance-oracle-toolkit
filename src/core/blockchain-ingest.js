@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('./quiet');
 
 /**
  * Blockchain Ingest — drains ledger-queue issues on remembrance-blockchain
@@ -33,7 +34,7 @@ function parseIssue(issue) {
     const m = body.match(re);
     return m ? m[1].trim() : null;
   };
-  return {
+  const __retVal = {
     issueNumber: issue.number,
     repo: field('repo'),
     pr: field('pr')?.split(' ')[0]?.replace('#', ''),
@@ -43,13 +44,21 @@ function parseIssue(issue) {
     mergedAt: field('merged_at'),
     title: (field('pr') || '').split('—')[1]?.trim() || issue.title,
   };
+  // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:blockchain-ingest:parseIssue' });
+        break;
+      } catch (_) { quiet('core:blockchain-ingest:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('core:blockchain-ingest:__recordCost', _); /* best-effort */ }
+  return __retVal;
 }
-parseIssue.atomicProperties = {
-  charge: -1, valence: 1, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0.3, group: 5, period: 3,
-  harmPotential: 'minimal', alignment: 'neutral', intention: 'neutral',
-  domain: 'covenant',
-};
+parseIssue.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 async function loadCurrentLedger() {
   try {
@@ -77,7 +86,19 @@ function buildEvent(parsed) {
 
 async function runIngest() {
   if (!TOKEN) throw new Error('GITHUB_TOKEN or ECOSYSTEM_PAT required');
-  const issues = await gh(`/repos/${OWNER}/${BLOCKCHAIN_REPO}/issues?state=open&labels=ledger-queue&per_page=30`);
+  // A 404 here means the queue does not exist to be drained — the repo
+  // has issues disabled (GitHub 404s the issues API in that case) or the
+  // repo is unreachable. An absent queue is an EMPTY queue, not a crash:
+  // the scheduled drain must stay green when there is nothing to drain.
+  let issues;
+  try {
+    issues = await gh(`/repos/${OWNER}/${BLOCKCHAIN_REPO}/issues?state=open&labels=ledger-queue&per_page=30`);
+  } catch (e) {
+    if (String(e.message).includes(': 404')) {
+      return { ingested: 0, reason: 'queue unreachable (issues disabled or repo missing) — treated as empty' };
+    }
+    throw e;
+  }
   if (issues.length === 0) return { ingested: 0, reason: 'queue empty' };
   const parsed = issues.map(parseIssue).filter(p => p.repo && p.pr);
   const events = parsed.map(buildEvent);
@@ -113,12 +134,7 @@ async function runIngest() {
 
   return { ingested: events.length, before, after: before + events.length, issues: parsed.map(p => p.issueNumber) };
 }
-runIngest.atomicProperties = {
-  charge: 1, valence: 4, mass: 'heavy', spin: 'odd', phase: 'plasma',
-  reactivity: 'reactive', electronegativity: 0.95, group: 18, period: 7,
-  harmPotential: 'minimal', alignment: 'healing', intention: 'benevolent',
-  domain: 'orchestration',
-};
+runIngest.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 if (require.main === module) {
   runIngest()
@@ -127,3 +143,10 @@ if (require.main === module) {
 }
 
 module.exports = { runIngest, parseIssue, loadCurrentLedger, buildEvent };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+gh.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+loadCurrentLedger.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+buildEvent.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

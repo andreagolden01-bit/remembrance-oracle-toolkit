@@ -222,6 +222,32 @@ function applyDecoherence(amplitude, lastObservedAt, now) {
 }
 
 /**
+ * Apply phase drift over elapsed time. Phase advances by PHASE_DRIFT_RATE
+ * radians per day, wrapped to [0, 2π). Used by decoherence sweeps so older
+ * unobserved patterns drift out of phase with fresh ones — this is what
+ * makes their interference (computeInterference) increasingly destructive
+ * over time.
+ *
+ * @param {number} currentPhase - Current phase in radians (defaults to 0)
+ * @param {string|Date} lastObservedAt - Timestamp anchoring the drift start
+ * @param {Date} [now] - Current time (default: now)
+ * @returns {number} Drifted phase, wrapped to [0, 2π)
+ */
+function applyPhaseDrift(currentPhase, lastObservedAt, now) {
+  const phase = typeof currentPhase === 'number' && isFinite(currentPhase) ? currentPhase : 0;
+  if (!lastObservedAt) return phase;
+
+  const observedDate = new Date(lastObservedAt);
+  const nowDate = now ? new Date(now) : new Date();
+  const daysSince = Math.max(0, (nowDate.getTime() - observedDate.getTime()) / 86400000);
+  if (daysSince <= 0) return phase;
+
+  const TWO_PI = 2 * Math.PI;
+  const drifted = (phase + PHASE_DRIFT_RATE * daysSince) % TWO_PI;
+  return Math.round((drifted < 0 ? drifted + TWO_PI : drifted) * 10000) / 10000;
+}
+
+/**
  * Determine quantum state based on amplitude.
  *
  * @param {number} amplitude - Current amplitude
@@ -391,7 +417,11 @@ function quantumDecision(amplitude, relevance) {
   const effective = amplitude * (0.6 + 0.4 * relevance);
 
   if (effective >= PULL_THRESHOLD) {
-    return { decision: 'pull', confidence: effective };
+    const __retVal = { decision: 'pull', confidence: effective };
+    // field contribution removed: contributed confidence (via __retVal), not a coherency.
+    // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+    // list treated any numeric-looking return field as a coherence signal.
+    return __retVal;
   }
   if (effective >= EVOLVE_THRESHOLD) {
     return { decision: 'evolve', confidence: effective };
@@ -457,6 +487,7 @@ module.exports = {
 
   // Decoherence
   applyDecoherence,
+  applyPhaseDrift,
   determineState,
 
   // Phase & Interference
@@ -477,3 +508,21 @@ module.exports = {
   // Observation
   observePattern,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+computeAmplitude.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+coherencyToAmplitude.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+amplitudeToCoherency.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+applyDecoherence.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+applyPhaseDrift.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+determineState.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computePhase.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeInterference.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+applyFieldInterference.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+canTunnel.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeEntanglementDelta.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+shouldEntangle.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+quantumDecision.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+observePattern.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

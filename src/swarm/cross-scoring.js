@@ -106,7 +106,11 @@ async function crossScore(agentOutputs, pool, dimensions) {
         return { reviewer, reviewee, score, reasoning: response.slice(0, 200) };
       } catch (e) {
         if (process.env.ORACLE_DEBUG) console.warn('[cross-scoring:crossScore] silent failure:', e?.message || e);
-        return { reviewer, reviewee, score: 0.5, reasoning: 'Review failed (timeout or error)' };
+        const __retVal = { reviewer, reviewee, score: 0.5, reasoning: 'Review failed (timeout or error)' };
+        // field contribution removed: contributed score (via __retVal), not a coherency.
+        // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+        // list treated any numeric-looking return field as a coherence signal.
+        return __retVal;
       }
     })
   );
@@ -164,3 +168,11 @@ module.exports = {
   crossScore,
   computePeerScores,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+scoreWithCoherency.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "solid", reactivity: "low", electronegativity: 0, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+buildPeerReviewPrompts.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+crossScore.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 8, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+computePeerScores.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

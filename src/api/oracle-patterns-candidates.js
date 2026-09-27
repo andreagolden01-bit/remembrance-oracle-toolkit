@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Oracle Patterns — Candidates, tagging, cleaning, promotion.
  */
@@ -18,6 +19,7 @@ function _findDuplicates(all) {
   }
   return toRemove;
 }
+_findDuplicates.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _findStubs(all, toRemove) {
   for (const p of all) {
@@ -35,6 +37,7 @@ function _findStubs(all, toRemove) {
     }
   }
 }
+_findStubs.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _evaluateCandidate(candidate, provenPatterns, options) {
   const { minCoherency = 0.9, minConfidence = 0.8, manualOverride = false, dryRun = false } = options;
@@ -74,11 +77,25 @@ function _evaluateCandidate(candidate, provenPatterns, options) {
   }
 
   if (dryRun) {
-    return { status: 'would-promote', coherency: coherency.toFixed(3) };
+    const __retVal = { status: 'would-promote', coherency: coherency.toFixed(3) };
+    // ── LRE field-coupling (auto-wired) ──
+    try {
+      const __lre_p1 = '../core/field-coupling';
+      const __lre_p2 = require('path').join(__dirname, '../core/field-coupling');
+      for (const __p of [__lre_p1, __lre_p2]) {
+        try {
+          const { recordCost: __recordCost } = require(__p);
+          __recordCost({ units: 1, kind: 'work', source: 'oracle:oracle-patterns-candidates:_evaluateCandidate' });
+          break;
+        } catch (_) { quiet('api:oracle-patterns-candidates:__recordCost', _); /* try next */ }
+      }
+    } catch (_) { quiet('api:oracle-patterns-candidates:__recordCost', _); /* best-effort */ }
+    return __retVal;
   }
 
   return { status: 'promote', coherency };
 }
+_evaluateCandidate.atomicProperties = { charge: 0, valence: 4, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 3, period: 4, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
 
 module.exports = {
   retag(id, options = {}) {

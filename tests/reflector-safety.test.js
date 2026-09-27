@@ -22,19 +22,19 @@ const { takeSnapshot } = require('../src/reflector/multi');
 
 // ─── Helpers ───
 
-function createTmpDir() {
+const createTmpDir = () => {
   const dir = join(tmpdir(), `safety-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
-}
+};
 
-function createTestFile(dir, name, code) {
+const createTestFile = (dir, name, code) => {
   const filePath = join(dir, name);
   const fileDir = join(dir, ...name.split('/').slice(0, -1));
   if (name.includes('/')) mkdirSync(fileDir, { recursive: true });
   writeFileSync(filePath, code, 'utf-8');
   return filePath;
-}
+};
 
 // ─── Backup Tests ───
 

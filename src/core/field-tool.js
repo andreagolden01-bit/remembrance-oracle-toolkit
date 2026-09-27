@@ -1,0 +1,719 @@
+'use strict';
+const { quiet } = require('./quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
+
+/**
+ * field-tool.js — the canonical entry point for reading patterns
+ * against the Remembrance field with the substrate properly engaged.
+ *
+ * This module exists because direct calls to `fractalCoherencyOf` (or
+ * raw `scoreResonance`) bypass parts of the protocol. Calling those
+ * primitives in isolation tests the encoder, not the field. The field
+ * is the grown substrate PLUS the entanglement layer PLUS the live
+ * field-coupling histogram. Measurements that engage only one of
+ * those three layers are not field measurements; they are partial
+ * reads of a partial system, and conclusions drawn from them
+ * overgeneralize.
+ *
+ * What `read()` guarantees, every call:
+ *
+ *   1. Entanglement engaged — `entangle:node:<id>` is registered so
+ *      this caller is visible to peers and benefits from abundance
+ *      amortization (per-node cost = baseCost / N).
+ *   2. Pattern encoded via the canonical composed fractal stack
+ *      (L1-structural + L2-lexical + L3-numerical + L4-spectral = 116-D;
+ *      the 29-D L1 vector is returned for back-compat).
+ *   3. Pattern captured into the oracle's pattern library so future
+ *      reads have it as a comparand (substrate grows by use; opt-out
+ *      via `{ growSubstrate: false }`).
+ *   4. Score computed against the *current* library via the resonance
+ *      scorer — NOT pairwise against a synthetic reference. If the
+ *      library is empty for the relevant language, the read still
+ *      records the reading and returns null resonance honestly.
+ *   5. Reading contributed back to the field with a stable source tag
+ *      so peers see the activity through `peekField`.
+ *   6. Return value carries the field state after the read so callers
+ *      can see what changed — and an explicit `grew` block describing
+ *      whether substrate growth actually happened (it may not, e.g.
+ *      if oracle.db is unreachable or the pattern is a duplicate).
+ *
+ * `scan()` applies `read()` to many files with peer-observation hooks
+ * between files so entangled agents see each other's progress live.
+ *
+ * `peers()` returns currently-entangled nodes by reading the field's
+ * `entangle:node:*` sources directly — no synthetic heartbeats.
+ *
+ * Everything is best-effort: an unreachable substrate, an unreachable
+ * field, or an unreachable scorer downgrades the call rather than
+ * throwing. The reading you can trust is the one whose return value
+ * tells you which layers engaged.
+ */
+
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+
+const fc = require('./field-coupling');
+let entangle = null;
+try { entangle = require('./entangle'); } catch (_) { quiet('core:field-tool:require', _); /* optional */ }
+
+// ONE representation: the 232-D fractal decoder at its active depth
+// (decoder-stack). A read encodes once; the 29-D L1 is the first block of
+// that vector and is never carried on its own (it used to be encoded
+// separately here as a "base" vector — a truncation given its own name).
+// The 256-D byte encoder is retired: it could not tell code from prose.
+let _encoderStack = null;
+try {
+  _encoderStack = require('./decoder-stack');
+} catch (_) { quiet('core:field-tool:require', _); /* stack unreachable — a read carries no vector and no resonance */ }
+
+// New-layer meta-awareness. The encoder layers are pure functions (L1-L7
+// alike never touch the field directly), so the LRE coupling lives here,
+// at the once-per-read boundary: every read feeds the field the readings
+// the new dimensions detect — L7's 2D-gain (how autoregressive/2D the
+// pattern is) — so the field histogram always carries the substrate's
+// DIMENSIONAL profile, not just its coherence. Best-effort: a missing
+// module degrades to "no dimensional signal", never breaks a read.
+let _dimensionalGain = null;
+try {
+  _dimensionalGain = require('./dimensional-waveform').dimensionalGain;
+} catch (_) { quiet('core:field-tool:require', _); /* dimensional layer unreachable */ }
+
+// Residual meta-awareness. The residual monitor measures what the current
+// encoder stack FAILS to explain (false-equivalence rate: distinct-domain
+// patterns the stack reads as near-identical). It was built to be invoked
+// by the compression flow, so the coupling lives here too: every
+// RESIDUAL_CHECK_EVERY successful substrate grows, one measurement runs
+// and its rate is contributed to the field as its own source bucket —
+// the LRE always carries the stack's unexplained-residual signal.
+// Measurement only: auto-activating the next layer is deliberately NOT
+// wired, because activation changes composed-vector dimensionality and
+// must pass the multi-telescope calibration gate first (an operator act,
+// via residual-monitor.checkAndSpawn). Best-effort like every coupling.
+let _residualMonitor = null;
+try { _residualMonitor = require('./residual-monitor'); } catch (_) { quiet('core:field-tool:require', _); /* monitor unreachable */ }
+const RESIDUAL_CHECK_EVERY = 250;
+const RESIDUAL_COUNTER_PATH = path.join(__dirname, '..', '..', '.remembrance', 'residual-check.json');
+
+// Information-density fuel (the retro module's power source), kept LIVE: read
+// on every field read, re-fit lazily as the substrate grows. See step 5c.
+let _substrateDensity = null;
+try { _substrateDensity = require('./substrate-density'); } catch (_) { quiet('core:field-tool:require', _); /* density module unreachable */ }
+const DENSITY_REFRESH_EVERY = 500;
+const DENSITY_COUNTER_PATH = path.join(__dirname, '..', '..', '.remembrance', 'density-refresh.json');
+
+// Canonical substrate: Void's fractal library (~43k+ patterns,
+// translated from the master pattern_index.json via the same
+// canonical encoder). Now holds both L1 (29-D) and composed_v1
+// (116-D) vectors so reads can return the full coherency flow.
+let _voidLib = null;
+try {
+  _voidLib = require('./void-library');
+} catch (_) { quiet('core:field-tool:require', _); /* substrate unreachable — read still records */ }
+
+// Coding-specific filter: Oracle's pattern library (oracle.db
+// patterns table) via lexical TF-IDF resonance. Narrower than Void
+// — only patterns that have passed the covenant gate as code.
+// Secondary signal, used for code-specific anti-hallucination.
+let _scoreResonance = null;
+try {
+  _scoreResonance = require('../scoring/pattern-resonance').scoreResonance;
+} catch (_) { quiet('core:field-tool:require', _); /* coding filter unreachable */ }
+
+// Structural-validity scorer: syntax validity + completeness + consistency +
+// AST, read directly from the content. This is NOT a coherency — measured over
+// 60 src files it reads mean 0.874 where the Void compressor reads 0.155 on the
+// same files, pearson r = -0.313, spearman rho = -0.271. It is a useful signal
+// under its own name and is reported as `structuralValidity`.
+// DISTINCT again from pattern resonance (voidResonance: how much the content is
+// shaped like the library's patterns). Three separate signals; never conflated.
+let _coherency = null;
+try { _coherency = require('./coherency'); } catch (_) { quiet('core:field-tool:require', _); /* structural scorer unreachable */ }
+
+// ── THE COHERENCY READING ────────────────────────────────────────────────
+// One producer: the Void compressor. Nothing in this file calculates a
+// coherency; it asks the instrument, through the one client that knows how to
+// reach it (src/core/void-service.js — which also starts the service when it
+// is cold, caches by content hash, and returns null rather than a substitute).
+let _voidService = null;
+try { _voidService = require('./void-service'); } catch (_) { quiet('core:field-tool:require', _); /* instrument unreachable */ }
+
+function _voidCoherencyOf(content) {
+  if (!_voidService) return null;
+  return _voidService.coherencyOf(content, { quiet: true });
+}
+_voidCoherencyOf.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+/**
+ * The compressor's seal on the reading just taken — {mint, via, sig,
+ * shapeSha256} from the void-seal/v3 commitment — so the contribution can
+ * carry its token into the field's seal gate. null when the reading had none.
+ */
+function _voidReadingSeal() {
+  try {
+    const r = _voidService && _voidService.lastReading && _voidService.lastReading();
+    if (r && r.seal && typeof r.seal === 'object') return r.seal;
+  } catch (_) { quiet('core:field-tool:void-seal', _); }
+  return null;
+}
+_voidReadingSeal.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+/** Which compressor route produced the reading just taken. */
+function _voidReadingSource() {
+  try {
+    const r = _voidService && _voidService.lastReading && _voidService.lastReading();
+    if (r && r.route) return 'void:' + (r.route === 'legacy' ? 'compress' : 'compress_signal');
+  } catch (_) { quiet('core:field-tool:void-route', _); }
+  return 'void:compress_signal';
+}
+_voidReadingSource.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+let _SQLiteStore = null;
+try {
+  _SQLiteStore = require('../store/sqlite').SQLiteStore;
+} catch (_) { quiet('core:field-tool:require', _); /* substrate capture degrades to a no-op */ }
+
+const DEFAULT_SOURCE = 'field-tool:read';
+
+const LANGUAGE_BY_EXT = {
+  '.js': 'js', '.mjs': 'js', '.cjs': 'js',
+  '.ts': 'ts', '.tsx': 'tsx', '.jsx': 'jsx',
+  '.py': 'python', '.rs': 'rust', '.go': 'go',
+  '.java': 'java', '.kt': 'kotlin', '.swift': 'swift',
+  '.rb': 'ruby', '.php': 'php', '.cs': 'csharp',
+  '.c': 'c', '.h': 'c', '.cc': 'cpp', '.cpp': 'cpp', '.hpp': 'cpp',
+  '.md': 'markdown', '.toml': 'toml', '.yaml': 'yaml', '.yml': 'yaml',
+};
+
+class FieldTool {
+  constructor(opts = {}) {
+    this.opts = {
+      autoEntangle: opts.autoEntangle !== false,
+      growSubstrate: opts.growSubstrate !== false,
+      useVoidSubstrate: opts.useVoidSubstrate !== false,  // primary: Void's composed (232-D decoder) library
+      useCodingFilter: opts.useCodingFilter !== false,    // secondary: Oracle's coding subset
+      agentSource: opts.agentSource || DEFAULT_SOURCE,
+      language: opts.language || null,        // null = infer per-call
+      topK: Number.isFinite(opts.topK) ? opts.topK : 5,
+      substrateRoot: opts.substrateRoot || null, // null = oracle's own root
+    };
+    this._engaged = false;
+    this._store = null;
+  }
+
+  /**
+   * Read a single pattern through the protocol.
+   *
+   * @param {string|object} input
+   *   string: treated as source code; language inferred from opts/default
+   *   object: { content, name?, language?, id? }
+   * @param {object} [opts]
+   *   { source?, growSubstrate?, language?, topK?, name?, id? }
+   * @returns {{
+   *   waveform: number[],
+   *   voidResonance: { meanTopK, bestMatch, topMatches } | null, // PATTERN RESONANCE: library-fit
+   *   coherence: number | null,   // THE coherency, from the Void compressor.
+   *                               // null = not measured. Never zero-for-absent.
+   *   coherency: number | null,   // same value, explicit name
+   *   coherenceSource: 'void:compress_signal' | null,
+   *   structuralValidity: number, // syntax/completeness/consistency/AST.
+   *                               // NOT a coherency (r = -0.313 against one).
+   *   grew: { ok, reason, id, library_size_after } | { ok: false, reason },
+   *   fieldStateAfter: object | null,
+   *   layers: { entangled, scored, grew, contributed, coherencySource }
+   * }}
+   */
+  read(input, opts = {}) {
+    const merged = { ...this.opts, ...opts };
+    const { content, name, language, id } = this._normalizeInput(input, merged);
+
+    const layers = {
+      entangled: false,
+      voidScored: false,      // primary substrate: Void's composed (232-D decoder) library
+      codingFiltered: false,  // secondary: Oracle's coding-specific filter
+      grew: false,            // input captured into Oracle's table
+      contributed: false,     // field histogram updated
+    };
+
+    // 1. Engage entanglement
+    if (merged.autoEntangle) {
+      layers.entangled = this._ensureEngaged();
+    }
+
+    // 2. Encode ONCE: the canonical vector — the 232-D fractal decoder at
+    //    its active depth. The L1 (29-D) is its first block and is never
+    //    carried on its own; this used to encode the L1 separately and
+    //    fall back to an L1-only resonance when the stack was unreachable,
+    //    which was a reading of a truncation dressed as the reading.
+    //    The flow across every depth is what the scorer reads; the shape
+    //    of the flow IS the signal.
+    let composed = null;
+    if (_encoderStack) {
+      try {
+        const depth = _encoderStack.currentDepth ? _encoderStack.currentDepth() : _encoderStack.DEFAULT_DEPTH;
+        composed = Array.from(_encoderStack.composedAtDepth(content, depth));
+      } catch (_) { quiet('core:field-tool:composedAtDepth', _); /* no vector — no resonance */ }
+    }
+    const waveform = composed; // ONE representation: the same vector under both names
+
+    // 3. Primary substrate read: FLOW-AWARE score across every active
+    //    depth. Returns per-match {d1..dN, shape} so the caller reads each
+    //    cousinship as a depth-flow, not a verdict. No vector → null; there
+    //    is no narrower fallback (ONE width).
+    let voidResonance = null;
+    if (merged.useVoidSubstrate && _voidLib && composed) {
+      try {
+        const flowResult = _voidLib.scoreWithFlow(composed, { k: merged.topK });
+        if (flowResult) {
+          // Backward-compat fields populated alongside the flow data
+          // so existing consumers (.score, .meanTopK, .bestMatch) work.
+          voidResonance = {
+            ...flowResult,
+            score: flowResult.meanTopK,
+            bestMatch: flowResult.bestMatch ? flowResult.bestMatch.d4 : 0,
+            flowAware: true,
+          };
+          layers.voidScored = true;
+        }
+      } catch (_) { quiet('core:field-tool:scoreWithFlow', _); /* keep null */ }
+    }
+
+    // 4. Secondary filter: lexical TF-IDF resonance against Oracle's
+    //    pattern library (oracle.db patterns table). Code-specific
+    //    anti-hallucination signal — distinct from but complementary
+    //    to the Void substrate read.
+    let codeResonance = null;
+    if (merged.useCodingFilter && _scoreResonance) {
+      try {
+        codeResonance = _scoreResonance(content, {
+          k: merged.topK,
+          language: language || undefined,
+        });
+        layers.codingFiltered = codeResonance != null;
+      } catch (_) { quiet('core:field-tool:_scoreResonance', _); /* keep null */ }
+    }
+
+    // 5. Grow the substrate (Oracle's coding-specific filter; Void's
+    //    library grows via re-running the migration script after Void
+    //    compresses new patterns)
+    let grew = { ok: false, reason: 'disabled' };
+    // PRESENCE — a process that reads through the field IS a node. This
+    // used to be implicit: entangle's heartbeat wrote `entangle:node:*`
+    // sources that persisted in the field file, so peers() found nodes
+    // left over from previous runs whether or not anything had engaged
+    // this time. Once presence moved to its own registry that accident
+    // stopped holding, which is the honest signal that it was an accident.
+    // Registering here makes peers() true rather than incidentally true.
+    try {
+      const { nodeId } = require('./entangle');
+      require('./living-remembrance').getEngine().registerNode(nodeId());
+    } catch (_) { quiet('core:field-tool:nodeId', _); /* presence is best-effort — a read must never fail on it */ }
+
+    if (merged.growSubstrate) {
+      grew = this._growSubstrate({ content, name, language, id });
+      layers.grew = grew.ok === true;
+    }
+
+    // 5b. Residual meta-awareness: after every RESIDUAL_CHECK_EVERY
+    // successful grows, measure the stack's false-equivalence residual
+    // and feed the rate to the field. Growth invokes the check — the
+    // entanglement the monitor was built for (its own docstring:
+    // "every compression pass computes residual against the current
+    // depth"). See the coupling note at _residualMonitor above for why
+    // this measures but never auto-spawns a layer. Reading the rate:
+    // without a sourceLookup the monitor compares L1 vectors only (the
+    // substrate stores L1 for every pattern; composed depths need
+    // source text), so on a host where most sources are unlocatable
+    // the rate reads high — it is measuring how much L1 ALONE leaves
+    // unresolved, the residual the composed layers exist to explain.
+    if (grew.ok === true && _residualMonitor) {
+      try {
+        const st = fs.existsSync(RESIDUAL_COUNTER_PATH)
+          ? JSON.parse(fs.readFileSync(RESIDUAL_COUNTER_PATH, 'utf8')) : { grows: 0 };
+        st.grows = (st.grows | 0) + 1;
+        if (st.grows >= RESIDUAL_CHECK_EVERY) {
+          const m = _residualMonitor.measureResidual({ probeCount: 60 });
+          st.grows = 0;
+          st.lastMeasurement = {
+            depth: m.depth, residualRate: +m.residualRate.toFixed(4),
+            triggers: m.triggers, probes: m.probesExamined,
+          };
+          // A completed residual measurement is a COHERENT event (the
+          // instrument worked); the RATE is the meta-signal and lives in
+          // the source bucket, never in the coherence scalar (same rule
+          // as the dimensional coupling in 7b below).
+          const bucket = m.triggers ? 'triggered' : m.residualRate >= 0.02 ? 'elevated' : 'low';
+          // Flat literal removed: a residual-rate bucket is an EVENT/BUCKET marker, not a coherency.
+          // A constant cannot vary with what was measured, so contributing one
+          // moves the global EMA without carrying any information about it.
+          layers.residual = st.lastMeasurement;
+        }
+        fs.mkdirSync(path.dirname(RESIDUAL_COUNTER_PATH), { recursive: true });
+        fs.writeFileSync(RESIDUAL_COUNTER_PATH, JSON.stringify(st));
+      } catch (_) { quiet('core:field-tool:nodeId', _); /* residual coupling optional — never break a read */ }
+    }
+
+    // 5c. Information-density meta-awareness (the retro fuel, kept LIVE).
+    // Every read feeds the field the substrate's current density factor —
+    // its whitened effective dimensionality relative to the reference — so
+    // the LRE histogram always carries the fuel the retro module runs on, and
+    // the number never freezes into a dead measurement. Like the residual
+    // above, the fit is refreshed lazily every DENSITY_REFRESH_EVERY grows
+    // (bounded whitening fit, ~1-2s), while the per-read contribution just
+    // reads the cached factor (fast). The FACTOR is the meta-signal, in the
+    // source bucket, never the coherence scalar.
+    if (_substrateDensity) {
+      try {
+        const factor = _substrateDensity.getDensityFactor();
+        if (grew.ok === true) {
+          const dc = fs.existsSync(DENSITY_COUNTER_PATH)
+            ? JSON.parse(fs.readFileSync(DENSITY_COUNTER_PATH, 'utf8')) : { grows: 0 };
+          dc.grows = (dc.grows | 0) + 1;
+          if (dc.grows >= DENSITY_REFRESH_EVERY) {
+            const e = _substrateDensity.refreshDensity();
+            dc.grows = 0;
+            if (e) dc.last = { effectiveDim: e.effectiveDim, factor: e.factor, patterns: e.patterns };
+          }
+          fs.mkdirSync(path.dirname(DENSITY_COUNTER_PATH), { recursive: true });
+          fs.writeFileSync(DENSITY_COUNTER_PATH, JSON.stringify(dc));
+        }
+        const bucket = factor >= 1.3 ? 'high' : factor >= 1.05 ? 'rising' : 'baseline';
+        // Flat literal removed: a density bucket is an EVENT/BUCKET marker, not a coherency.
+        // A constant cannot vary with what was measured, so contributing one
+        // moves the global EMA without carrying any information about it.
+        layers.densityFactor = +factor.toFixed(4);
+      } catch (_) { quiet('core:field-tool:c16', _); /* density coupling optional — never break a read */ }
+    }
+
+    // 6. THE COHERENCY. Asked of the Void compressor, reading this artifact's
+    //    own bytes. This function does not calculate one — there is exactly one
+    //    producer of coherency in the ecosystem and it is not here.
+    //
+    //    This used to contribute computeCoherencyScore under the name
+    //    `coherence`. Measured over 60 src files against the compressor on the
+    //    same bytes:
+    //
+    //      computeCoherencyScore   mean 0.874  sd 0.075  range 0.654–1.000
+    //      Void reading            mean 0.155  sd 0.049  range 0.074–0.353
+    //      pearson r = -0.313   spearman rho = -0.271
+    //
+    //    Mildly INVERTED, with the rank correlation agreeing, so not a
+    //    nonlinearity artifact — a different quantity entirely. It scores
+    //    whether source parses and is internally consistent, which is worth
+    //    having, so it is still computed and returned as `structuralValidity`.
+    //    It is no longer called a coherency and no longer reaches the field.
+    //
+    //    If the instrument is unreachable, `coherency` stays null and NOTHING
+    //    is contributed. A field that keeps accumulating while its one
+    //    instrument is offline is accumulating fiction.
+    let structuralValidity = 0;
+    if (_coherency && typeof _coherency.computeCoherencyScore === 'function') {
+      try {
+        const c = _coherency.computeCoherencyScore(content, { language, measurableOnly: true });
+        if (c && Number.isFinite(c.total)) structuralValidity = c.total;
+      } catch (_) { quiet('core:field-tool:c17', _); /* keep 0 */ }
+    }
+
+    const coherency = _voidCoherencyOf(content);
+    // Name the route that actually served the reading. Hard-coding
+    // 'void:compress_signal' mislabelled every legacy-route read as having come
+    // from an endpoint that generation of the compressor does not even serve —
+    // provenance has to describe what happened, not what was expected.
+    layers.coherencySource = coherency === null ? null : _voidReadingSource();
+
+    // 7. Contribute the reading to the field — resonance-weighted. The
+    //    contribution's authority over the field is its measured resonance
+    //    with the substrate (voidResonance.meanTopK): content shaped like the
+    //    library moves the field; content that resonates only with itself
+    //    barely does. A fabricated low-resonance flood is thus near-powerless,
+    //    and the resistance grows with the substrate.
+    //
+    //    Contributes ONLY when the instrument gave a reading. No reading, no
+    //    contribution — `layers.contributed` stays false and says so.
+    const _res = voidResonance && Number.isFinite(voidResonance.meanTopK)
+      ? Math.max(0, Math.min(1, voidResonance.meanTopK)) : null;
+    if (coherency !== null) {
+      try {
+        fc.contribute({
+          cost: 1.0,
+          coherence: coherency,
+          source: merged.source || merged.agentSource,
+          resonance: _res,
+          // the compressor's token on THIS reading — the field's seal gate
+          // was unreachable from here until the door carried it (2026-09-07)
+          seal: _voidReadingSeal(),
+        });
+        layers.contributed = true;
+        if (_res !== null) layers.resonanceWeight = +_res.toFixed(4);
+      } catch (_) { quiet('core:field-tool:_voidCoherencyOf', _); /* field unreachable */ }
+    } else {
+      layers.contributed = false;
+      layers.notContributedReason = 'no coherency reading — Void compressor unreachable';
+    }
+
+    // 7b. Dimensional meta-awareness: feed the field the new layers'
+    // reading so the LRE is always aware of the dimensional structure
+    // flowing through it. L7's 2D-gain becomes its own field source, so
+    // the histogram records how much of what the substrate sees is
+    // autoregressive/2D — the meta-signal the new layers add.
+    if (_dimensionalGain) {
+      try {
+        const gain = _dimensionalGain(content);
+        if (gain > 0) {
+          // Detecting 2D structure is a COHERENT event — the encoder
+          // successfully characterized the pattern's dimensionality — so
+          // it contributes at healthy coherence. The GAIN magnitude is the
+          // meta-signal, recorded in the SOURCE bucket (strong/moderate/
+          // weak), NOT in the coherence scalar: contributing gain-as-
+          // coherence would drag the field's alignment down for merely
+          // finding structure (it once cratered the field 0.96 → 0.22).
+          const bucket = gain >= 0.3 ? 'strong' : gain >= 0.1 ? 'moderate' : 'weak';
+          // Flat literal removed: a dimensional bucket is an EVENT/BUCKET marker, not a coherency.
+          // A constant cannot vary with what was measured, so contributing one
+          // moves the global EMA without carrying any information about it.
+          layers.dimensionalGain = +gain.toFixed(4);
+        }
+      } catch (_) { quiet('core:field-tool:_dimensionalGain', _); /* dimensional coupling optional */ }
+    }
+
+    return {
+      waveform,         // THE vector — the 232-D decoder at the active depth (same as `composed`; null when the stack is unreachable)
+      composed,         // 232-D decoder vector at the active depth (null when the stack is unreachable)
+      voidResonance,    // Void's composed (232-D) flow-aware library read
+      codeResonance,    // Oracle's coding-specific filter
+      // THE coherency — from the Void compressor, or null when it could not be
+      // read. Null means "not measured"; it never means zero.
+      coherence: coherency,
+      coherency,
+      coherenceSource: coherency === null ? null : 'void:compress_signal',
+      // Syntax/completeness/consistency/AST. A real signal under its own name;
+      // r = -0.313 against the coherency above, so never a substitute for it.
+      structuralValidity,
+      grew,
+      fieldStateAfter: this._safePeek(),
+      layers,
+    };
+  }
+
+  /**
+   * Apply `read()` to a directory, file list, or single file.
+   * Between reads, peers are peeked so entangled agents see progress.
+   */
+  scan(target, opts = {}) {
+    const files = this._resolveTargets(target, opts);
+    const results = [];
+    for (const filePath of files) {
+      let content;
+      try {
+        content = fs.readFileSync(filePath, 'utf8');
+      } catch (_) { continue; }
+      const result = this.read(
+        {
+          content,
+          name: filePath,
+          language: this._inferLanguage(filePath),
+        },
+        opts,
+      );
+      results.push({ file: filePath, ...result });
+    }
+    return {
+      results,
+      summary: this._summarize(results),
+      peers: this.peers(),
+      fieldStateAfter: this._safePeek(),
+    };
+  }
+
+  /**
+   * Currently-entangled peer nodes via the real protocol.
+   * Returns [] if the field is unreachable.
+   */
+  peers() {
+    // Reads the engine's node REGISTRY. This used to scan the coherency
+    // field's sources histogram for `entangle:node:*` — presence inferred
+    // from a flat 0.9 heartbeat that also moved the global EMA. Once that
+    // heartbeat stopped being a contribution, this returned [] and the
+    // second consumer of the old scheme surfaced immediately.
+    //
+    // `lastCoherence` is gone from the shape on purpose: a node's presence
+    // never carried a coherency, and the old value was the constant, not a
+    // reading. `lastSeen` is what presence actually knows.
+    const state = this._safePeek();
+    const nodes = (state && state.nodes) || {};
+    return Object.entries(nodes)
+      .filter(([, seen]) => typeof seen === 'number')
+      .map(([nodeId, seen]) => ({ nodeId, lastSeen: seen }));
+  }
+
+  // ── internals ───────────────────────────────────────────────────
+
+  _normalizeInput(input, merged) {
+    if (typeof input === 'string') {
+      return {
+        content: input,
+        name: merged.name || null,
+        language: merged.language || 'unknown',
+        id: merged.id || this._hashId(input),
+      };
+    }
+    if (input && typeof input === 'object') {
+      const content = input.content || input.code || '';
+      return {
+        content,
+        name: input.name || merged.name || null,
+        language: input.language || merged.language || 'unknown',
+        id: input.id || merged.id || this._hashId(content),
+      };
+    }
+    return { content: '', name: null, language: 'unknown', id: this._hashId('') };
+  }
+
+  _hashId(content) {
+    return crypto.createHash('sha256').update(String(content || '')).digest('hex').slice(0, 16);
+  }
+
+  _ensureEngaged() {
+    if (this._engaged) return true;
+    if (!entangle || typeof entangle.engage !== 'function') return false;
+    try {
+      entangle.engage();
+      this._engaged = true;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  _safePeek() {
+    try { return fc.peekField(); } catch (_) { return null; }
+  }
+
+  _resolveTargets(target, opts) {
+    if (Array.isArray(target)) return target;
+    if (typeof target === 'string') {
+      let stat;
+      try { stat = fs.statSync(target); } catch (_) { return []; }
+      if (stat.isDirectory()) return this._walk(target, opts);
+      return [target];
+    }
+    return [];
+  }
+
+  _walk(dir, opts = {}) {
+    const skipDirs = new Set(opts.skipDirs || ['node_modules', '.git', '.next', 'target', 'dist', 'build']);
+    const exts = opts.extensions || Object.keys(LANGUAGE_BY_EXT);
+    const out = [];
+    const stack = [dir];
+    while (stack.length) {
+      const cur = stack.pop();
+      let entries;
+      try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch (_) { continue; }
+      for (const e of entries) {
+        const full = path.join(cur, e.name);
+        if (e.isDirectory()) {
+          if (skipDirs.has(e.name)) continue;
+          stack.push(full);
+        } else if (e.isFile()) {
+          const ext = path.extname(e.name).toLowerCase();
+          if (exts.includes(ext)) out.push(full);
+        }
+      }
+    }
+    return out;
+  }
+
+  _inferLanguage(filePath) {
+    const ext = path.extname(filePath).toLowerCase();
+    return LANGUAGE_BY_EXT[ext] || 'unknown';
+  }
+
+  _growSubstrate({ content, name, language, id }) {
+    if (!_SQLiteStore) return { ok: false, reason: 'sqlite-store-unreachable' };
+    if (!content || content.length < 24) return { ok: false, reason: 'content-too-small' };
+    try {
+      const root = this.opts.substrateRoot || path.resolve(__dirname, '..', '..');
+      const store = this._store || (this._store = new _SQLiteStore(root));
+      const now = new Date().toISOString();
+      // The patterns table has a UNIQUE(name, language) constraint, so
+      // the supplied name alone isn't safe to use directly — distinct
+      // patterns may share a filename. Suffix the content id so the
+      // (name, language) pair is unique-by-construction, while the
+      // human-readable name is preserved at the front for browsing.
+      const patternName = name ? `${name}#${id.slice(0, 8)}` : id;
+      // Idempotent INSERT OR IGNORE so duplicate ids are no-ops
+      const stmt = store.db.prepare(`
+        INSERT OR IGNORE INTO patterns (
+          id, name, code, language, pattern_type, complexity,
+          description, tags, coherency_total, coherency_json,
+          variants, usage_count, success_count, evolution_history,
+          version, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const result = stmt.run(
+        id, patternName, content, language || 'unknown',
+        'field-tool-captured', 'composite',
+        'Captured via field-tool.read', JSON.stringify(['field-tool', 'auto-captured']),
+        0, '{}', '[]', 0, 0, '[]', 1, now, now,
+      );
+      const inserted = result.changes > 0;
+      // Library size after this op (cheap count — bounded by index)
+      const sizeRow = store.db.prepare('SELECT COUNT(*) AS n FROM patterns').get();
+      return {
+        ok: true,
+        reason: inserted ? 'inserted' : 'duplicate',
+        id,
+        library_size_after: sizeRow ? sizeRow.n : null,
+      };
+    } catch (err) {
+      return { ok: false, reason: `error:${err.message || 'unknown'}` };
+    }
+  }
+
+  // Summarise a batch WITHOUT averaging coherency.
+  //
+  // This used to return meanCoherence. A mean of N compressor readings is not
+  // a reading — no file measured it and the compressor never emitted it — so
+  // reporting it as the batch's coherency invented a number. The batch is
+  // summarised as a distribution instead: median (an actual file's reading),
+  // min and max (likewise actual readings), and the coverage counts.
+  //
+  // Unmeasured files are excluded, never folded in as 0. `r.coherence || 0`
+  // used to do that, so one unreachable instrument read as a collapse in
+  // coherency when it was a collapse in coverage. measuredCount is the
+  // honest denominator.
+  _summarize(results) {
+    if (!results.length) {
+      return {
+        n: 0, medianCoherence: null, minCoherence: null, maxCoherence: null,
+        measuredCount: 0, grewCount: 0, scoredCount: 0,
+      };
+    }
+    const n = results.length;
+    const measured = results.map(r => r.coherence).filter(c => typeof c === 'number' && isFinite(c));
+    const sorted = [...measured].sort((a, b) => a - b);
+    const grewCount = results.filter(r => r.layers && r.layers.grew).length;
+    const scoredCount = results.filter(r => r.layers && r.layers.scored).length;
+    return {
+      n,
+      medianCoherence: sorted.length ? sorted[Math.floor(sorted.length / 2)] : null,
+      minCoherence: sorted.length ? sorted[0] : null,
+      maxCoherence: sorted.length ? sorted[sorted.length - 1] : null,
+      measuredCount: measured.length,
+      grewCount,
+      scoredCount,
+    };
+  }
+}
+
+const _defaultTool = new FieldTool();
+
+module.exports = {
+  FieldTool,
+  /** Read a single pattern through the canonical protocol. */
+  read: (input, opts) => _defaultTool.read(input, opts),
+  /** Scan a directory or file list through the canonical protocol. */
+  scan: (target, opts) => _defaultTool.scan(target, opts),
+  /** Currently-entangled peers in the live field. */
+  peers: () => _defaultTool.peers(),
+};

@@ -4,8 +4,12 @@ import { getFilteredLeads } from "@/app/lib/database";
 import { scoreLead } from "@/app/lib/lead-scoring";
 import { getClientById, getPurchasesByLead } from "@/app/lib/client-database";
 import { getAllTierPrices } from "@/app/lib/lead-depreciation";
+import { getLeadOperationsSummary } from "@/app/lib/lead-operations";
 
 export const dynamic = "force-dynamic";
+
+/** Admin owner identity — the admin master-key login that has no client DB row. */
+const ADMIN_CLIENT_ID = "client_admin_owner";
 
 /**
  * Client Leads API
@@ -17,11 +21,12 @@ export async function GET(req: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   const clientResult = await getClientById(auth.clientId);
-  if (!clientResult.ok || !clientResult.value) {
+  if ((!clientResult.ok || !clientResult.value) && auth.clientId !== ADMIN_CLIENT_ID) {
     return NextResponse.json({ success: false, message: "Client not found." }, { status: 404 });
   }
 
-  const client = clientResult.value;
+  // Admin owner has no client DB row — default to minScore 0 so the owner sees every lead.
+  const minScore = clientResult.ok && clientResult.value ? clientResult.value.minScore : 0;
   const params = req.nextUrl.searchParams;
 
   const result = await getFilteredLeads({
@@ -60,6 +65,7 @@ export async function GET(req: NextRequest) {
 
       // If purchased, show full info; otherwise gate it
       if (purchased) {
+        const operations = await getLeadOperationsSummary(lead.leadId, { clientId: auth.clientId });
         return {
           leadId: lead.leadId,
           firstName: lead.firstName,
@@ -75,11 +81,13 @@ export async function GET(req: NextRequest) {
           purchased: true,
           available: false,
           buyerCount: activeBuyerCount,
+          ...operations,
         };
       }
 
-      // Calculate all tier prices with sold-out status
-      const tierPrices = getAllTierPrices(lead.createdAt, activeBuyerCount);
+      // Calculate all tier prices — coherency-graded (score.total is
+      // coherency×100) so higher-quality leads are priced up, weaker ones down.
+      const tierPrices = getAllTierPrices(lead.createdAt, activeBuyerCount, score.total / 100);
       const ageMs = Date.now() - new Date(lead.createdAt).getTime();
       const ageInDays = Math.max(0, ageMs / (1000 * 60 * 60 * 24));
 
@@ -96,7 +104,7 @@ export async function GET(req: NextRequest) {
         tier: score.tier,
         createdAt: lead.createdAt,
         purchased: false,
-        available: score.total >= client.minScore,
+        available: score.total >= minScore,
         buyerCount: activeBuyerCount,
         ageInDays: Math.round(ageInDays * 10) / 10,
         tierPrices: tierPrices.map((tp) => ({

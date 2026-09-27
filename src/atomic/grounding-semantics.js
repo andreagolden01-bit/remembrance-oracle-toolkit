@@ -38,7 +38,11 @@ function classifyNameIntent(name) {
   for (const [cat, re] of Object.entries(INTENT_CATEGORIES)) {
     if (re.test(name)) return { category: cat, confidence: 0.8, matchedBy: re.source };
   }
-  return { category: 'neutral', confidence: 0.3 };
+  const __retVal = { category: 'neutral', confidence: 0.3 };
+  // field contribution removed: contributed confidence (via __retVal), not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
 
 function classifyBodyBehavior(body) {
@@ -112,12 +116,7 @@ function detectLieGap(name, body, declaredProps) {
     isLying: lieScore >= 0.4,
   };
 }
-detectLieGap.atomicProperties = {
-  charge: 0, valence: 3, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'reactive', electronegativity: 0.85, group: 18, period: 6,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
+detectLieGap.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function extractFunctions(source) {
   const fns = [];
@@ -155,12 +154,7 @@ function auditSourceForLies(source) {
     weakSignals: results.filter(r => !r.isLying),
   };
 }
-auditSourceForLies.atomicProperties = {
-  charge: 1, valence: 4, mass: 'heavy', spin: 'odd', phase: 'gas',
-  reactivity: 'reactive', electronegativity: 0.9, group: 18, period: 7,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'security',
-};
+auditSourceForLies.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 12, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function parseDeclaredProps(body) {
   const out = {};
@@ -183,3 +177,12 @@ module.exports = {
   classifyNameIntent, classifyBodyBehavior, expectedBehaviorFor,
   detectLieGap, extractFunctions, auditSourceForLies, parseDeclaredProps,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+classifyNameIntent.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+classifyBodyBehavior.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+expectedBehaviorFor.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractFunctions.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "low", electronegativity: 0, group: 2, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+parseDeclaredProps.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

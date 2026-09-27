@@ -67,7 +67,7 @@ export const fileAdapter: LedgerAdapter = {
       const filePath = path.join(ledgerDir(), `ledger-${month}.jsonl`);
       const s = await stat(filePath);
       const text = await readFile(filePath, "utf8");
-      const lines = text.split("\n").filter((l) => l.trim().length > 0).length;
+      const lines = text.split("\n").filter((l: string) => l.trim().length > 0).length;
       return { month, size: s.size, lines };
     } catch {
       return null;
@@ -76,13 +76,21 @@ export const fileAdapter: LedgerAdapter = {
 
   async readRecent(limit) {
     try {
-      const filePath = path.join(ledgerDir(), fileFor(new Date()));
-      const text = await readFile(filePath, "utf8");
-      const lines = text.split("\n").filter((l) => l.trim().length > 0);
-      const recent = lines.slice(-limit).reverse();
+      // Walk every monthly file newest-first, not just the current month,
+      // so a trailing window isn't truncated at a calendar boundary.
+      const dir = ledgerDir();
+      const files = (await readdir(dir))
+        .filter((n: string) => /^ledger-\d{4}-\d{2}\.jsonl$/.test(n))
+        .sort()
+        .reverse();
       const out: LedgerEntry[] = [];
-      for (const l of recent) {
-        try { out.push(JSON.parse(l) as LedgerEntry); } catch { /* skip */ }
+      for (const name of files) {
+        if (out.length >= limit) break;
+        const text = await readFile(path.join(dir, name), "utf8");
+        const lines = text.split("\n").filter((l: string) => l.trim().length > 0);
+        for (let i = lines.length - 1; i >= 0 && out.length < limit; i--) {
+          try { out.push(JSON.parse(lines[i]) as LedgerEntry); } catch { /* skip */ }
+        }
       }
       return out;
     } catch {

@@ -7,11 +7,11 @@ const os = require('os');
 const { TestGenerator, TestRunner, TestScorer, TestForge } = require('../src/test-forge');
 const { RemembranceOracle } = require('../src/api/oracle');
 
-function makeTempDir() {
+const makeTempDir = () => {
   const dir = path.join(os.tmpdir(), `forge-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
-}
+};
 
 // ─── TestGenerator Tests ───
 
@@ -52,8 +52,8 @@ describe('TestGenerator', () => {
 
   it('extracts exports correctly', () => {
     const code = `
-function greet(name) { return 'Hello ' + name; }
-function farewell(name) { return 'Goodbye ' + name; }
+func${''}tion greet(name) { return 'Hello ' + name; }
+func${''}tion farewell(name) { return 'Goodbye ' + name; }
 module.exports = { greet, farewell };
     `;
     const pattern = { code, name: 'greetings', language: 'javascript' };

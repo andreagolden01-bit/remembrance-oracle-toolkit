@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Pattern Recycler — the exponential growth engine.
  *
@@ -1568,11 +1569,24 @@ class PatternRecycler {
         console.log(`  [PROMOTED] ${candidate.name} → proven (coherency ${result.validation.coherencyScore.total.toFixed(3)})`);
       }
 
-      return {
+      const __retVal = {
         promoted: true,
         pattern: result.pattern,
         coherency: result.validation.coherencyScore.total,
       };
+      // ── LRE field-coupling (auto-wired) ──
+      try {
+        const __lre_p1 = '../core/field-coupling';
+        const __lre_p2 = require('path').join(__dirname, '../core/field-coupling');
+        for (const __p of [__lre_p1, __lre_p2]) {
+          try {
+            const { recordCost: __recordCost } = require(__p);
+            __recordCost({ units: 1, kind: 'work', source: 'oracle:recycler:promoteWithProof' });
+            break;
+          } catch (_) { quiet('evolution:recycler:__recordCost', _); /* try next */ }
+        }
+      } catch (_) { quiet('evolution:recycler:__recordCost', _); /* best-effort */ }
+      return __retVal;
     }
 
     // ─── Auto-heal on promotion failure ───
@@ -1791,3 +1805,8 @@ class PatternRecycler {
 }
 
 module.exports = { PatternRecycler, APPROACH_SWAPS, LANG_TEMPLATES };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+indent.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

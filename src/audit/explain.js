@@ -1,6 +1,11 @@
 'use strict';
 
 /**
+ * @oracle-pattern-definitions — this file's `bad:` entries are deliberate
+ * counterexamples of every rule, so it necessarily contains the very shapes
+ * the covenant blocks (eval on tainted input, the Function constructor, SQL
+ * concatenation). They live in string literals and are never executed.
+ *
  * `oracle audit explain <rule>` — worked examples for every rule.
  *
  * Each entry has:
@@ -509,9 +514,12 @@ function listRules(filter) {
   }
   return [...out].sort((a, b) => a.ruleId.localeCompare(b.ruleId));
 }
+listRules.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 5, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+lines.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function explain(ruleId) {
   return EXPLANATIONS[ruleId] || null;
 }
+explain.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = { EXPLANATIONS, explain, listRules };

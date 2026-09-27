@@ -1,4 +1,24 @@
 'use strict';
+const { quiet } = require('../core/quiet');
+
+/**
+ * @oracle-infrastructure — internal schema migration on a FIXED table
+ * allowlist. Every ${...} in this file's SQL is a table or column IDENTIFIER,
+ * never a value: the names come from the QUANTUM_TABLES constant, an
+ * allowlist check rejects anything else, and sqlite_master is queried to
+ * confirm the table exists before any DDL runs.
+ *
+ * SQL has no placeholder for an identifier — you cannot parameterise a table
+ * or column name — so interpolation is the only way to write these
+ * statements. The covenant's template-literal rule flags them anyway, and
+ * exempting the DDL forms globally was not enough because the same
+ * identifiers appear in SELECT and UPDATE here too. Widening a security rule
+ * further to fit one module is the wrong trade; the annotation scopes the
+ * exemption to the file that has actually been read and verified.
+ *
+ * Value interpolation into SQL is still a real defect everywhere, including
+ * in this file. This exempts identifiers, not data.
+ */
 
 /**
  * Quantum Field — The unified quantum state manager for all Oracle patterns.
@@ -31,6 +51,7 @@ const {
   computeAmplitude,
   coherencyToAmplitude,
   applyDecoherence,
+  applyPhaseDrift,
   determineState,
   computePhase,
   computeInterference,
@@ -45,6 +66,7 @@ const {
 function safeParse(str, fallback) {
   try { return JSON.parse(str || JSON.stringify(fallback)); } catch { return fallback; }
 }
+safeParse.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // Tables that participate in the quantum field
 const QUANTUM_TABLES = ['patterns', 'entries', 'candidates', 'debug_patterns'];
@@ -52,12 +74,18 @@ const QUANTUM_TABLES = ['patterns', 'entries', 'candidates', 'debug_patterns'];
 class QuantumField {
   /**
    * @param {object} store - SQLiteStore instance with .db property
-   * @param {object} [options] - { verbose }
+   * @param {object} [options]
+   * @param {boolean} [options.verbose]
+   * @param {function} [options.onCascade] — fired when a pattern's amplitude
+   *   crosses CASCADE_THRESHOLD upward on a successful feedback. Receives
+   *   { table, id, previousAmplitude, newAmplitude, threshold }. Best-effort:
+   *   exceptions are caught and logged under ORACLE_DEBUG.
    */
   constructor(store, options = {}) {
     this.store = store;
     this.db = store.db;
     this.verbose = options.verbose || false;
+    this.onCascade = typeof options.onCascade === 'function' ? options.onCascade : null;
 
     this._migrateAllTables();
   }
@@ -242,11 +270,59 @@ class QuantumField {
     const delta = computeEntanglementDelta(succeeded);
     const propagated = this._propagateEntanglement(entangled, delta, id);
 
+    // Cascade growth trigger — when a pattern's amplitude crosses
+    // CASCADE_THRESHOLD upward on a successful feedback, fire the
+    // cascade hook so consumers (e.g. the recycler) can spawn
+    // entangled variants. See quantum-core.CASCADE_THRESHOLD docstring.
+    const cascadeTriggered = this._fireCascadeIfCrossed(
+      table, id, currentAmplitude, newAmplitude, succeeded
+    );
+
     return {
       amplitude: Math.round(newAmplitude * 1000) / 1000,
       quantumState,
       entanglementPropagated: propagated,
+      cascadeTriggered,
     };
+  }
+
+  /**
+   * Detect an upward CASCADE_THRESHOLD crossing on a successful feedback,
+   * contribute the event to the LRE field, and (if wired) call the
+   * onCascade consumer. Returns true iff a crossing fired.
+   */
+  _fireCascadeIfCrossed(table, id, previousAmplitude, newAmplitude, succeeded) {
+    if (!succeeded) return false;
+    if (previousAmplitude > CASCADE_THRESHOLD) return false; // already past
+    if (newAmplitude <= CASCADE_THRESHOLD) return false;     // didn't cross
+
+    // No field contribution. The comment this replaces said "the cascade is a
+    // meaningful event, so the LRE should see it" — and that is exactly the
+    // confusion. The LRE is a coherency field, not an event log. What was
+    // contributed here is `newAmplitude`, a quantum amplitude that crossed a
+    // threshold: a real quantity, measuring how excited a debug pattern is,
+    // and not a coherency.
+    //
+    // The event is still fired to the onCascade consumer below, which is what
+    // an event should reach. If the cascade's coherency is ever wanted, it has
+    // to be measured — the amplitude is not a stand-in for it.
+
+    if (this.onCascade) {
+      try {
+        this.onCascade({
+          table,
+          id,
+          previousAmplitude,
+          newAmplitude,
+          threshold: CASCADE_THRESHOLD,
+        });
+      } catch (e) {
+        if (process.env.ORACLE_DEBUG) {
+          console.warn(`[quantum-field:cascade:${table}:${id}]`, e?.message || e);
+        }
+      }
+    }
+    return true;
   }
 
   /**
@@ -310,7 +386,7 @@ class QuantumField {
             .run(updated, now, linkedId);
           propagated++;
           break; // Found in this table, skip remaining tables
-        } catch (e) {
+        } catch (e) { quiet('quantum:quantum-field:safeParse', e);
           // Table might not exist or column might be missing — skip
         }
       }
@@ -332,6 +408,8 @@ class QuantumField {
     const now = new Date();
     const cutoff = new Date(now.getTime() - maxDays * 86400000).toISOString();
     const report = { totalDecohered: 0 };
+    let amplitudeSum = 0;
+    let amplitudeCount = 0;
 
     for (const table of QUANTUM_TABLES) {
       try {
@@ -341,34 +419,72 @@ class QuantumField {
         if (!tableExists) continue;
 
         const stale = this.db.prepare(
-          `SELECT id, amplitude, last_observed_at FROM ${table}
+          `SELECT id, amplitude, phase, last_observed_at FROM ${table}
            WHERE (last_observed_at IS NOT NULL AND last_observed_at < ?)
               OR (last_observed_at IS NULL AND created_at < ?)`
         ).all(cutoff, cutoff);
 
         let tableDecohered = 0;
+        let tablePhaseDrifted = 0;
         for (const row of stale) {
           const rawAmplitude = row.amplitude || PLANCK_AMPLITUDE;
-          const decohered = applyDecoherence(rawAmplitude, row.last_observed_at || cutoff, now.toISOString());
+          const anchor = row.last_observed_at || cutoff;
+          const decohered = applyDecoherence(rawAmplitude, anchor, now.toISOString());
+          const driftedPhase = applyPhaseDrift(row.phase || 0, anchor, now.toISOString());
+          const phaseChanged = driftedPhase !== (row.phase || 0);
+          amplitudeSum += decohered;
+          amplitudeCount += 1;
 
           if (decohered < minAmplitude) {
             this.db.prepare(
-              `UPDATE ${table} SET amplitude = ?, quantum_state = ?, updated_at = ? WHERE id = ?`
-            ).run(decohered, QUANTUM_STATES.DECOHERED, now.toISOString(), row.id);
+              `UPDATE ${table} SET amplitude = ?, phase = ?, quantum_state = ?, updated_at = ? WHERE id = ?`
+            ).run(decohered, driftedPhase, QUANTUM_STATES.DECOHERED, now.toISOString(), row.id);
             tableDecohered++;
-          } else if (decohered < rawAmplitude) {
+            if (phaseChanged) tablePhaseDrifted++;
+          } else if (decohered < rawAmplitude || phaseChanged) {
             this.db.prepare(
-              `UPDATE ${table} SET amplitude = ?, updated_at = ? WHERE id = ?`
-            ).run(decohered, now.toISOString(), row.id);
+              `UPDATE ${table} SET amplitude = ?, phase = ?, updated_at = ? WHERE id = ?`
+            ).run(decohered, driftedPhase, now.toISOString(), row.id);
+            if (phaseChanged) tablePhaseDrifted++;
           }
         }
 
-        report[table] = { swept: stale.length, decohered: tableDecohered };
+        report[table] = { swept: stale.length, decohered: tableDecohered, phaseDrifted: tablePhaseDrifted };
         report.totalDecohered += tableDecohered;
+        report.totalPhaseDrifted = (report.totalPhaseDrifted || 0) + tablePhaseDrifted;
       } catch (e) {
         report[table] = { error: e.message };
       }
     }
+
+    // Wire the sweep into the LRE field. Two contributions per sweep:
+    //   - decoherence-sweep: average amplitude of swept patterns (low =
+    //     field is forgetting). cost = number of stale rows touched.
+    //   - phase-drift-sweep: how many patterns drifted phase. coherence
+    //     reflects post-sweep amplitude (drift correlates with aging).
+    // Both best-effort — sweep results never fail because field is down.
+    try {
+      // PROVENANCE (2026-08-09): avgAmplitude was both an AVERAGE and a
+      // quantum-layer number no compressor ever emitted — a double
+      // violation (no-averaging law + provenance law). The sweeps are
+      // maintenance WORK sized by what they touched; the amplitudes stay
+      // in the sweep report.
+      const { recordCost } = require('../core/field-coupling');
+      if (amplitudeCount > 0) {
+        recordCost({
+          units: amplitudeCount,
+          kind: 'maintenance',
+          source: 'quantum:decoherence-sweep',
+        });
+        if ((report.totalPhaseDrifted || 0) > 0) {
+          recordCost({
+            units: report.totalPhaseDrifted,
+            kind: 'maintenance',
+            source: 'quantum:phase-drift-sweep',
+          });
+        }
+      }
+    } catch (_) { quiet('quantum:quantum-field:recordCost', _); /* best-effort */ }
 
     return report;
   }
@@ -535,7 +651,7 @@ class QuantumField {
             walk(linkedId, currentDepth + 1);
           }
           break; // Found in this table
-        } catch (e) { /* table might not have the right columns yet */ }
+        } catch (e) { quiet('quantum:quantum-field:walk', e); /* table might not have the right columns yet */ }
       }
     };
 

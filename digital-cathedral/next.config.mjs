@@ -5,14 +5,6 @@ if (process.env.NEXTAUTH_URL?.includes(",")) {
   process.env.NEXTAUTH_URL = process.env.NEXTAUTH_URL.split(",")[0].trim();
 }
 
-// ─── Multi-Domain: collect all allowed domains for CORS / image optimization ───
-const leadsDomains = (process.env.LEADS_DOMAINS || "")
-  .split(",")
-  .map((d) => d.trim())
-  .filter(Boolean);
-const portalDomain = (process.env.PORTAL_DOMAIN || "").trim();
-const allDomains = [...leadsDomains, portalDomain].filter(Boolean);
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -22,12 +14,50 @@ const nextConfig = {
     serverComponentsExternalPackages: ["better-sqlite3"],
   },
 
-  // ─── Multi-Domain: Allow CORS for cross-domain API calls between leads and portal ───
-  async rewrites() {
-    return [];
+  // ─── Security Headers (HTTPS everywhere) ───
+  // /our-story was a real page before its content moved into /about. Handling
+  // the move with redirect() inside the page produced a 200 carrying a
+  // meta-refresh — a visible ~1s blank frame for the visitor, and a thin page
+  // search engines keep indexing under the old URL. A config redirect is a real
+  // 308: instant for the visitor, and it transfers the old URL's standing to
+  // the new one instead of stranding it.
+  async redirects() {
+    return [
+      { source: "/our-story", destination: "/about#our-story", permanent: true },
+      // The eight veteran landing pages under /resources were retired so the
+      // Resource Center carries one consistent set of guides. They were live,
+      // indexed URLs, so they point at the guide that replaced them rather
+      // than 404ing anyone arriving from a search result or an old link.
+      ...[
+        "veteran-final-expense",
+        "military-mortgage-protection",
+        "veteran-iul-retirement",
+        "national-guard-life-insurance",
+        "military-spouse-insurance",
+        "disabled-veteran-life-insurance",
+        "sgli-to-vgli-transition",
+        "veteran-estate-planning",
+      ].map((slug) => ({
+        source: `/resources/${slug}`,
+        destination: "/guides/veteran-benefits-vs-private-coverage",
+        permanent: true,
+      })),
+      // The blog was fifteen veteran/military posts and nothing else, so it was
+      // an entirely military section on a site that now speaks to every life
+      // chapter. Retired with the posts pointed at the Resource Center, which
+      // is where a reader arriving from a search result actually wants to land.
+      { source: "/blog", destination: "/resources", permanent: true },
+      { source: "/blog/:slug", destination: "/resources", permanent: true },
+      // feed.xml carried only those posts.
+      { source: "/feed.xml", destination: "/feed.json", permanent: true },
+      // The two campaign landing pages were noindex, so nothing organic points
+      // here; this only catches an old direct link. The /lp shell itself is
+      // kept for the next campaign.
+      { source: "/lp/veteran-life-insurance", destination: "/", permanent: false },
+      { source: "/lp/military-family", destination: "/", permanent: false },
+    ];
   },
 
-  // ─── Security Headers (HTTPS everywhere) ───
   async headers() {
     return [
       {

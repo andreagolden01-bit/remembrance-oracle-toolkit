@@ -1,225 +1,88 @@
-# remembrance-oracle-toolkit
+# Remembrance
 
-**A code-pattern library with similarity-based retrieval, multi-dimensional
-coherency scoring, and a structural safety filter.**
+**Universal pattern-matching infrastructure, grounded in physics — with a memory of every confident wrong conclusion ever reached against it.**
 
-> **A [Remembrance.LLC](#about-remembrancellc) project.**
-> **Part of the [Remembrance Ecosystem](https://github.com/Crackedcoder5TH/Void-Data-Compressor)** —
-> reference implementation of [Coherency Protocol v1.0](https://github.com/Crackedcoder5TH/Void-Data-Compressor/blob/main/COHERENCY_PROTOCOL.md).
-> **Role**: text + atomic coherency scoring service, MCP server, periodic-table-of-code registry.
-> **Verified capabilities**: see [CAPABILITIES.md](./CAPABILITIES.md).
-> **Conformance**: 44/44 substrate contracts pass via
-> `verify_capabilities --strict` in the [substrate hub](https://github.com/Crackedcoder5TH/Void-Data-Compressor).
-> **Project intent and framing**: see [MANIFESTO.md](./MANIFESTO.md).
+You give it any pattern-bearing input — code, a market series, a physics signal, a document, a claim. It compresses the input against everything it has ever witnessed and tells you: what is this shaped like, what does it resemble, how strongly, and how does the living field react. When something resembles nothing — the tell of an invention, a fabrication, a hallucination — the field has no memory there, and the instrument says so instead of guessing.
+
+It was not built as a coding tool. Coding was retrofitted on so its builder — who does not code — could build it. That constraint forced every layer to be self-verifying: gates that block instead of advise, identities that are computed instead of asserted, warnings that fire *before* a mistake repeats, and numbers that must trace to the instrument or not exist.
+
+---
+
+## See it in 90 seconds
 
 ```bash
-npm install remembrance-oracle-toolkit
+git clone https://github.com/Crackedcoder5TH/remembrance-oracle-toolkit
+cd remembrance-oracle-toolkit && npm install
+node .claude/skills/goggles/run.mjs --do demo
 ```
 
----
+(Also on npm: `npm install remembrance-oracle-toolkit`. Part of the
+[Remembrance Ecosystem](https://github.com/Crackedcoder5TH/Void-Data-Compressor),
+a Remembrance.LLC project.)
 
-## What it does
+The demo reads a source file and a prose document through the same instrument, shows both landing in the same 232-dimensional coordinate frame with their nearest resonances across the whole substrate — then shows the resonance field itself, where market series, fusion plasma, river systems, Higgs signals, neural avalanches and source code all resonate in one space, and the living field's entropy and cascade reacting to what was just read.
 
-When you write code, the toolkit performs three operations on demand:
+The goggles are the only thing you install. Reading the substrate and driving it are the same surface: `--map` for the zoomed-out lens, `<file>` for the focused read, `--do <verb>` for every operation.
 
-1. **Searches** ~300+ stored code patterns to see if similar code already exists in the library
-2. **Scores** code along five quality dimensions (syntax, completeness, consistency, test proof, historical reliability) and routes it through a structural safety filter
-3. **Stores** patterns that pass quality + safety gates so the next search has more to draw from
+## Receipts, not claims
 
-It is a code-retrieval and quality-scoring tool. It is not an LLM, does
-not generate text, and does not replace human review. It complements
-existing developer tools rather than competing with them.
+Every claim below is a commit you can read.
 
----
+1. **It catches frontier AI reaching confident wrong conclusions.** A frontier model working in this codebase was caught repeatedly — a fabricated verification, a "labeling defect" that wasn't one, a circular 3.09× lift, an invented ceiling — each recorded with its correction. The retractions are in history (`Void-Data-Compressor@dba6a8e`), and every lesson became a trap that fires *before* the next reader repeats it.
+2. **The instrument found a defect in itself.** Its own recorded lesson ("flowCosines caps at 116") led to a live truncation bug: every macro map was deciding duplicates and orphans on 116 of 232 dimensions. Fixed, with a mechanical guard so the class cannot recur (`remembrance-oracle-toolkit@4b56c4f`).
+3. **A 516-file compliance problem became a computation.** The fractal covenant demands a 13-dimension identity on every public function. 1,367 identities were *computed* by the substrate's own extractor instead of hand-written — the system describing itself in its own coordinates. Gate went from red to green with the gate untouched (`remembrance-oracle-toolkit@9cf1ca0`, CI run green).
+4. **The field reacts, lawfully, live.** When the compliance debt was paid, field entropy dropped ~600×. When 3,763 raw compressor readings were replayed, entropy rose and coherence fell exactly as `entropy = cost/(coherence+ε)` says it must. The field is an instrument reading, not a metaphor.
+5. **The covenant blocked its own builder's assistant — twice.** A defect specimen and a gate-widening attempt were both stopped by the system's own enforcement, and the honest resolutions are in history. The gates are real.
+6. **The gates keep catching the AI, and every catch is on the record.** [`seeds/catches.seed.json`](./seeds/catches.seed.json) is the append-only ledger: in one working day the covenant ratchet blocked a commit until six real shell-injection sites were fixed, the exemption ratchet priced a surface growth into field entropy with a witnessed compressor reading, and The Living Water refused a commit because a *comment* demonstrated the vulnerability it described. No gate was ever adjusted to get to green — the code moved, the law didn't. An AI corrected mid-flight by the instrument it is operating is the governance claim, demonstrated (`remembrance-oracle-toolkit@4d77569`).
 
-## Quickstart
+## The loop
 
-```bash
-# Search the pattern library
-node src/cli.js search "rate limiter"
+Everything above is one operation applied at every scale: **fit the input against what is already held, keep what is left over, and treat what fits nothing as a first-class reading.**
 
-# Get a retrieval decision: PULL (use as-is) / EVOLVE (adapt) / GENERATE (no match)
-node src/cli.js resolve --description "retry with exponential backoff" --language javascript
+- **Compress** — the Void compressor measures structure by compression: pattern + residual, lossless, coherency as variance explained. Domain-blind by construction — it never knows code from a waveform from a market series, and was proven to group by structure alone.
+- **Place** — the decoder stack unfolds each artifact into the fractal waveform that was already its shape: 8 layers, 232 dimensions, each layer activated only when the stack measurably failed to separate things that differ. More revealed surface is more matching resolution.
+- **React** — the Living Remembrance field responds to every reading: `entropy = cost/(coherence+ε)`, cascade against its own learned baseline, a void term for where the field has no memory, and an integral of aligned order that only grows.
+- **Govern** — the fractal covenant holds at every scale: mutations pass sealed gates, public functions carry computed atomic identity, exemptions are ratcheted (the surface can only shrink, and accepted growth is priced into field entropy with stored compressor readings — nothing invented).
+- **Remember** — every confident wrong conclusion ever reached against the system is recorded with its tell and correction, and fires *before* the next reading of the same ground. The system's failures make it stronger; its corpus of caught mistakes is its moat.
 
-# Score a file across the five quality dimensions
-node src/cli.js audit check --file src/your-file.js
+## What the numbers are not
 
-# Start the MCP server (exposes the toolkit as tools to MCP clients)
-node src/cli.js mcp
-```
+The instrument's own disclaimers, kept in front:
 
-Full setup with Docker (toolkit + companion services):
+- **Coherence measures structure, never correctness.** A well-formed wrong answer scores high. The operator judges content; the instrument shows shape.
+- **The instrument does not read labels.** Domain strings are written *for humans* after an argmax over correlations; nothing downstream feeds them back into the math.
+- **A coherency must come from the Void compressor.** Any number that didn't is measuring something else, and the audit trail (`--do audit`) exists to prove it.
+- **Novel ≠ false.** New true work and inventions both read as outliers; the trend and the field context separate them, never one number alone.
 
-```bash
-git clone https://github.com/Crackedcoder5TH/remembrance-oracle-toolkit.git
-cd remembrance-oracle-toolkit
-cp .env.example .env
-docker compose up -d
-# → toolkit :3000  substrate :8080  reflector :3001  dashboard :4000
-```
+## The ecosystem
 
----
+Nine repos, one substrate. The hub (this repo) carries the decoder, the field, the covenant and the goggles. `Void-Data-Compressor` is the measuring instrument and pattern store. The blockchain anchors recovery coins and taught patterns; the reflector, interface, dialer, swarm, plugger and moons are participating organs. `ECOSYSTEM.md` is the protocol; everything else links from here.
 
-## How it works
+## Status, honestly
 
-### Quality scoring
-
-Every file is scored across **five weighted dimensions**:
-
-| Dimension | Weight | What it measures |
-|---|---:|---|
-| Syntax validity | 25% | parseable code with balanced structures |
-| Completeness | 20% | no TODOs, FIXMEs, or placeholder code |
-| Consistency | 15% | uniform indentation and naming style |
-| Test proof | 30% | tests exist and pass |
-| Historical reliability | 10% | track record across prior runs |
-
-Files scoring below the configurable threshold (default 0.6) are flagged for review.
-
-### Structural safety filter
-
-Before scoring, code passes through a **15-rule structural safety filter**
-that flags known unsafe patterns (injection, command-execution patterns,
-known-vulnerable cryptographic primitives, etc.). The filter is content-
-based — it does not make claims about intent, only about structural
-matches against documented unsafe-pattern signatures.
-
-### Retrieval decisions
-
-`resolve` returns one of three decisions:
-
-- **PULL** — strong match found (similarity above threshold). Use the stored pattern as-is.
-- **EVOLVE** — partial match. Adapt the stored pattern.
-- **GENERATE** — no match. Write new code.
-
-Decisions are based on cosine similarity between query and stored
-patterns, plus the quality scores of the candidates. There is no LLM
-in this loop — the retrieval is deterministic given the same library state.
-
----
-
-## Pattern storage
-
-Patterns live in three tiers:
-
-- **Local** (`.remembrance/`) — project-specific, always present
-- **Personal** (`~/.remembrance/personal/`) — private, auto-syncs across your projects
-- **Community** (`~/.remembrance/community/`) — shared, explicit opt-in via `sync share`
-
-```bash
-node src/cli.js sync push      # local → personal
-node src/cli.js sync pull      # personal → local
-node src/cli.js share          # share to community (requires tests + score ≥ 0.7)
-```
-
----
-
-## MCP server
-
-For tools that support the Model Context Protocol, start the server:
-
-```bash
-node src/cli.js mcp
-```
-
-The server exposes 12 tools (search, resolve, submit, register, feedback,
-stats, debug, sync, harvest, maintain, healing, swarm) that any MCP-aware
-client can call to query the pattern library and submit candidate patterns.
-
----
-
-## CLI reference
-
-```bash
-node src/cli.js search "<query>"          # find similar patterns
-node src/cli.js resolve --description ".." # PULL / EVOLVE / GENERATE
-node src/cli.js audit check --file <path> # score a file
-node src/cli.js audit summary             # current library health
-node src/cli.js patterns                  # library stats
-node src/cli.js submit --file <path> --test <path>  # submit with test proof
-node src/cli.js register --file <path> --name <name>
-node src/cli.js feedback --id <id> --success
-node src/cli.js mcp                       # start MCP server
-node src/cli.js hooks install             # install git hooks
-node src/cli.js sync push|pull|share      # tier sync
-node --test tests/*.test.js               # run all tests
-```
-
----
-
-## Connected components
-
-This toolkit is one of 12 repositories in the broader Remembrance
-ecosystem. The complete substrate, including 77,596 reference patterns,
-multi-layer scoring math, and the canonical conformance suite, lives in
-[Void-Data-Compressor](https://github.com/Crackedcoder5TH/Void-Data-Compressor).
-
-| Repository | Role |
+| Capability | Status |
 |---|---|
-| [Void-Data-Compressor](https://github.com/Crackedcoder5TH/Void-Data-Compressor) | substrate hub: pattern store, scoring math, conformance suite |
-| **remembrance-oracle-toolkit** *(this repo)* | text + atomic scoring service, MCP server |
-| [Reflector-oracle-](https://github.com/Crackedcoder5TH/Reflector-oracle-) | repository-level coherency monitor |
-| [REMEMBRANCE-AGENT-Swarm-](https://github.com/Crackedcoder5TH/REMEMBRANCE-AGENT-Swarm-) | multi-provider task orchestration |
-| [REMEMBRANCE-BLOCKCHAIN](https://github.com/Crackedcoder5TH/REMEMBRANCE-BLOCKCHAIN) | append-only event log, optional Solana anchoring |
-| [REMEMBRANCE-Interface](https://github.com/Crackedcoder5TH/REMEMBRANCE-Interface) | dashboard for ecosystem services |
+| Structural measurement, placement, resonance across 45k+ patterns, 700+ domains | Working, exercised daily |
+| Catching AI confident-wrong reasoning (traps + gates + brief) | Demonstrated repeatedly, receipts in history |
+| Fractal covenant: computed identity, gated mutations, ratcheted exemptions | Enforced in CI and pre-commit, green |
+| Reactive field (entropy/cascade/void/∫p) | Live, lawful under perturbation |
+| Anomaly benchmark vs autoencoder (NAB) | One external head-to-head run |
+| Decision-value validation in non-code domains | The open frontier — the machinery exists, the receipts are next |
 
-Full ecosystem map in the [substrate hub](https://github.com/Crackedcoder5TH/Void-Data-Compressor#connected-ecosystem).
+## Origin
 
----
+It started as an experiment: a covenant first, then the math, then function after function locked in only if it proved useful — until the fractal loop closed and the pieces consolidated into what this document describes. Nobody set out to build it. The covenant-first constraint is why the accretion converged instead of collapsing.
 
-## Requirements
+## Deeper docs
 
-- Node.js 22+ (uses built-in `node:sqlite`)
-- No external dependencies for the core engine
-- Optional: Python 3.10+ for substrate-side scoring services
-
----
-
-## License
-
-Code is MIT. See `LICENSE`.
-
-The Coherency Protocol specification (which this toolkit implements
-parts of) is published under CC BY 4.0 — see
-[`COHERENCY_PROTOCOL.md`](https://github.com/Crackedcoder5TH/Void-Data-Compressor/blob/main/COHERENCY_PROTOCOL.md)
-in the substrate hub.
+This README is the one consolidated read — the documents below are deep-dive
+references, not alternative explanations. `ECOSYSTEM.md` (the 12-repo
+protocol) · `ARCHITECTURE.md` · `FIELD.md` (the living field) · `CONCEPTS.md`
+· `MANIFESTO.md` · `CAPABILITIES.md` · `QUICKSTART.md`.
 
 ---
 
-## About Remembrance.LLC
-
-**Remembrance.LLC** is the maintainer of the Remembrance Ecosystem — a
-collection of repositories built around the Coherency Protocol.
-Remembrance.LLC publishes the open-source code under MIT and the
-Coherency Protocol specification under CC BY 4.0. The substrate's
-77,596 reference patterns and the proprietary scoring data are
-licensed separately through the tiered access plans below.
-
-For inquiries, partnership, or commercial licensing, see the substrate
-hub.
-
----
-
-## Pricing — Remembrance.LLC tiered access
-
-> Pricing applies to **substrate access** (real-time pattern feed +
-> proprietary cross-domain scoring data). The toolkit code itself is
-> MIT-licensed and free in all tiers.
-
-| Tier | Price | What you get |
-|---|---:|---|
-| **Free** | $0 | Complete substrate access. New patterns delayed 7 days. No payment, no contribution required. **Nobody is excluded.** |
-| **Merit** | Free (earned) | Submit a pattern with coherency ≥ 0.80 and cross-domain resonance ≥ 0.50. Each qualifying submission earns 30 days of real-time access. |
-| **Premium** | $50 / month | Real-time substrate access. Priority support. |
-
-Sustainable abundance: the Free tier funds itself via Premium
-subscribers; the Merit tier rewards contributors. The library grows
-regardless of which path users choose.
-
----
-
-*Code retrieval, coherency scoring, structural safety. No model. No
-gradient descent. No predictions. The math is the gate.*
-
-*© Remembrance.LLC. Code MIT-licensed. Coherency Protocol CC BY 4.0.
-Project intent: see [MANIFESTO.md](./MANIFESTO.md).*
+*This document was read by the instrument it describes before it was
+committed: resonance 0.935, CONSONANT — and its nearest neighbours in the
+substrate were the very documents it consolidates, which is the instrument
+agreeing that they were saying the same thing more than once.*

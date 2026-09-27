@@ -12,9 +12,10 @@
  *  - Delivery filter management
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { US_STATES } from "../../../packages/shared/src/validate-state";
+import { resonance, suggestTerms } from "../../lib/valor/resonance-search";
 
 const COVERAGE_LABELS: Record<string, string> = {
   "mortgage-protection": "Term Life",
@@ -23,6 +24,7 @@ const COVERAGE_LABELS: Record<string, string> = {
   "legacy": "Whole Life",
   "retirement-savings": "IUL",
   "guaranteed-income": "Annuity",
+  "newborn-milestones": "Whole Life (Juvenile)",
   "not-sure": "Undecided",
 };
 
@@ -80,15 +82,6 @@ interface Purchase {
   returnDeadline: string;
 }
 
-interface BillingRecord {
-  billingId: string;
-  periodStart: string;
-  periodEnd: string;
-  leadsPurchased: number;
-  totalAmount: number;
-  paymentStatus: string;
-}
-
 interface Filters {
   states: string[];
   coverageTypes: string[];
@@ -98,6 +91,9 @@ interface Filters {
   distributionMode: string;
 }
 
+interface PricingTier { name: string; maxBuyers: number; basePrice: number; }
+interface PricingData { tiers: PricingTier[]; maxPrice: number; priceFloor: number; }
+
 type Tab = "leads" | "purchases" | "billing" | "filters";
 
 export default function AgentPortal() {
@@ -106,24 +102,37 @@ export default function AgentPortal() {
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [leads, setLeads] = useState<AvailableLead[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
-  const [billing, setBilling] = useState<BillingRecord[]>([]);
   const [filters, setFilters] = useState<Filters>({
     states: [], coverageTypes: [], veteranOnly: false, minScore: 0, maxLeadAge: 72, distributionMode: "shared",
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  // Track whether the initial profile fetch failed (network error, 5xx) so
+  // the marketplace doesn't get stuck on "Loading..." forever with no recovery path.
+  const [profileError, setProfileError] = useState("");
 
 
   // Lead filters
   const [filterState, setFilterState] = useState("");
   const [filterCoverage, setFilterCoverage] = useState("");
+  // Resonance search query + admin-driven pricing.
+  const [query, setQuery] = useState("");
+  const [pricing, setPricing] = useState<PricingData | null>(null);
 
   const fetchProfile = useCallback(async () => {
-    const res = await fetch("/api/client/profile");
-    if (res.status === 401) { router.push("/portal/login"); return; }
-    if (res.ok) {
-      const data = await res.json();
-      setProfile(data.client);
+    try {
+      const res = await fetch("/api/client/profile");
+      if (res.status === 401) { router.push("/portal"); return; }
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data.client);
+        setProfileError("");
+        return;
+      }
+      // 4xx/5xx that isn't 401 — surface to user instead of spinning forever
+      setProfileError("Could not load your account. Please try again.");
+    } catch {
+      setProfileError("Network error loading your account. Check your connection and retry.");
     }
   }, [router]);
 
@@ -132,7 +141,8 @@ export default function AgentPortal() {
     const params = new URLSearchParams();
     if (filterState) params.set("state", filterState);
     if (filterCoverage) params.set("coverage", filterCoverage);
-    params.set("limit", "25");
+    // Pull a healthy pool so the resonance search has something to rank over.
+    params.set("limit", "100");
 
     const res = await fetch(`/api/client/leads?${params}`);
     if (res.ok) {
@@ -147,14 +157,6 @@ export default function AgentPortal() {
     if (res.ok) {
       const data = await res.json();
       setPurchases(data.purchases || []);
-    }
-  }, []);
-
-  const fetchBilling = useCallback(async () => {
-    const res = await fetch("/api/client/billing");
-    if (res.ok) {
-      const data = await res.json();
-      setBilling(data.billing || []);
     }
   }, []);
 
@@ -187,9 +189,8 @@ export default function AgentPortal() {
   useEffect(() => {
     if (tab === "leads") fetchLeads();
     else if (tab === "purchases") fetchPurchases();
-    else if (tab === "billing") fetchBilling();
     else if (tab === "filters") fetchFilters();
-  }, [tab, fetchLeads, fetchPurchases, fetchBilling, fetchFilters]);
+  }, [tab, fetchLeads, fetchPurchases, fetchFilters]);
 
   // Handle payment return from Stripe Checkout
   useEffect(() => {
@@ -213,18 +214,64 @@ export default function AgentPortal() {
         })
         .catch(() => setMessage("Could not verify payment — contact support."));
       // Clean URL params
-      window.history.replaceState({}, "", "/portal");
+      window.history.replaceState({}, "", "/portal/marketplace");
     } else if (payment === "cancelled") {
       setMessage("Payment cancelled. You have not been charged.");
-      window.history.replaceState({}, "", "/portal");
+      window.history.replaceState({}, "", "/portal/marketplace");
     }
   }, []);
 
+  // Pricing tiers from the admin-adjustable config — no hardcoded numbers.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/pricing")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d?.tiers) setPricing(d as PricingData); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // ── Resonance search over the loaded leads ──
+  // Each lead is scored by how strongly its terms (state, coverage, veteran
+  // status, tier) resonate with what the agent typed — the same vocabulary
+  // resonance the field uses — re-ranked live, partial words resonating toward
+  // their completion ("tex" → "texas").
+  const stateName = useCallback(
+    (code: string) => US_STATES.find((s) => s.code === code)?.name || code,
+    [],
+  );
+  const leadText = useCallback(
+    (l: AvailableLead) =>
+      [stateName(l.state), l.state, COVERAGE_LABELS[l.coverageInterest] || l.coverageInterest, l.coverageInterest, l.veteranStatus, l.tier]
+        .join(" ")
+        .replace(/-/g, " "),
+    [stateName],
+  );
+  const ranked = useMemo(() => {
+    if (!query.trim()) return leads;
+    return leads
+      .map((l) => ({ l, r: resonance(query, leadText(l)) }))
+      .filter((x) => x.r > 0)
+      .sort((a, b) => b.r - a.r || b.l.score - a.l.score)
+      .map((x) => x.l);
+  }, [leads, query, leadText]);
+  const vocab = useMemo(() => {
+    const set = new Set<string>();
+    for (const l of leads) {
+      set.add(stateName(l.state));
+      set.add(COVERAGE_LABELS[l.coverageInterest] || l.coverageInterest);
+    }
+    return [...set];
+  }, [leads, stateName]);
+  const suggestions = useMemo(() => suggestTerms(query, vocab), [query, vocab]);
+
   const handlePurchase = async (leadId: string, tierIndex: number) => {
     setMessage("");
+    const csrfRes = await fetch("/api/csrf");
+    const csrfData = csrfRes.ok ? await csrfRes.json() : { token: "" };
     const res = await fetch("/api/client/purchase", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfData.token },
       body: JSON.stringify({ leadId, tierIndex }),
     });
     const data = await res.json();
@@ -239,9 +286,11 @@ export default function AgentPortal() {
     const reason = prompt("Reason for return (e.g., wrong number, fake info):");
     if (!reason) return;
 
+    const csrfRes = await fetch("/api/csrf");
+    const csrfData = csrfRes.ok ? await csrfRes.json() : { token: "" };
     const res = await fetch("/api/client/returns", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-CSRF-Token": csrfData.token },
       body: JSON.stringify({ purchaseId, reason }),
     });
     const data = await res.json();
@@ -261,12 +310,35 @@ export default function AgentPortal() {
 
   const handleLogout = async () => {
     await fetch("/api/client/logout", { method: "POST" });
-    router.push("/portal/login");
+    router.push("/portal");
   };
 
   const formatCents = (cents: number) => `$${(cents / 100).toFixed(2)}`;
 
   if (!profile) {
+    if (profileError) {
+      return (
+        <main className="min-h-screen flex items-center justify-center px-4">
+          <div className="cathedral-surface p-8 max-w-sm w-full text-center rounded-xl space-y-4">
+            <p className="text-sm text-[var(--text-primary)]">{profileError}</p>
+            <div className="flex items-center justify-center gap-3">
+              <button
+                onClick={() => { setProfileError(""); fetchProfile(); }}
+                className="px-4 py-2 rounded-lg text-sm bg-teal-cathedral text-white hover:bg-teal-cathedral/90"
+              >
+                Retry
+              </button>
+              <button
+                onClick={() => router.push("/portal")}
+                className="px-4 py-2 rounded-lg text-sm border border-indigo-cathedral/20 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+              >
+                Back to Sign In
+              </button>
+            </div>
+          </div>
+        </main>
+      );
+    }
     return (
       <main className="min-h-screen flex items-center justify-center">
         <p className="text-[var(--text-muted)]">Loading...</p>
@@ -283,7 +355,13 @@ export default function AgentPortal() {
           <h1 className="text-2xl font-light text-[var(--text-primary)]">{profile.companyName}</h1>
           <p className="text-sm text-[var(--text-muted)]">{profile.contactName}</p>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
+          <a
+            href="/portal/dashboard"
+            className="px-4 py-2 rounded-lg text-sm text-[var(--text-muted)] border border-indigo-cathedral/10 hover:border-indigo-cathedral/25"
+          >
+            My Account
+          </a>
           <button onClick={handleLogout} className="px-4 py-2 rounded-lg text-sm text-[var(--text-muted)] border border-indigo-cathedral/10 hover:border-indigo-cathedral/25">Logout</button>
         </div>
       </header>
@@ -316,6 +394,36 @@ export default function AgentPortal() {
       {/* ─── Available Leads Tab ─── */}
       {tab === "leads" && (
         <>
+          {/* Resonance search — type anything; leads re-rank by how strongly they resonate */}
+          <div className="cathedral-surface p-4 mb-4">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search leads by resonance — e.g. “texas veteran final expense”"
+              aria-label="Search leads by resonance"
+              className="w-full bg-[var(--bg-surface)] text-[var(--text-primary)] border border-indigo-cathedral/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-cathedral/25"
+            />
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setQuery((q) => { const parts = q.split(/\s+/); parts[parts.length - 1] = s; return parts.join(" ") + " "; })}
+                    className="px-2 py-0.5 rounded text-xs text-teal-cathedral border border-teal-cathedral/20 hover:bg-teal-cathedral/10"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+            {query.trim() && (
+              <p className="text-[11px] text-[var(--text-muted)] mt-2">
+                {ranked.length} lead{ranked.length === 1 ? "" : "s"} resonate with “{query.trim()}”
+              </p>
+            )}
+          </div>
+
           <div className="cathedral-surface p-4 mb-4">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               <select value={filterState} onChange={(e) => setFilterState(e.target.value)}
@@ -328,7 +436,7 @@ export default function AgentPortal() {
                 <option value="">All Coverage</option>
                 {Object.entries(COVERAGE_LABELS).map(([val, label]) => <option key={val} value={val}>{label}</option>)}
               </select>
-              <button onClick={() => { setFilterState(""); setFilterCoverage(""); }} className="text-sm text-teal-cathedral underline py-2">Clear</button>
+              <button onClick={() => { setFilterState(""); setFilterCoverage(""); setQuery(""); }} className="text-sm text-teal-cathedral underline py-2">Clear</button>
             </div>
           </div>
 
@@ -347,10 +455,10 @@ export default function AgentPortal() {
               <tbody>
                 {loading ? (
                   <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--text-muted)]">Loading leads...</td></tr>
-                ) : leads.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--text-muted)]">No leads available.</td></tr>
+                ) : ranked.length === 0 ? (
+                  <tr><td colSpan={6} className="px-4 py-8 text-center text-[var(--text-muted)]">{query.trim() ? `No leads resonate with “${query.trim()}”.` : "No leads available."}</td></tr>
                 ) : (
-                  leads.map((lead) => (
+                  ranked.map((lead) => (
                     <tr key={lead.leadId} className="border-b border-indigo-cathedral/5 hover:bg-[var(--bg-surface)]/50 transition-colors">
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${TIER_STYLES[lead.tier] || ""}`}>
@@ -509,18 +617,29 @@ export default function AgentPortal() {
           <div className="cathedral-surface p-6">
             <h3 className="text-lg font-light text-[var(--text-primary)] mb-4">Lead Pricing Tiers</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { name: "Exclusive", buyers: "1 buyer", price: 12000, cardClass: "metallic-gold-card", labelClass: "metallic-gold" },
-                { name: "Semi-Exclusive", buyers: "2 buyers", price: 10000, cardClass: "metallic-silver-card", labelClass: "metallic-silver" },
-                { name: "Warm Shared", buyers: "3–4 buyers", price: 8000, cardClass: "metallic-bronze-card", labelClass: "metallic-bronze" },
-                { name: "Cool Shared", buyers: "5–6 buyers", price: 6000, cardClass: "metallic-sky-card", labelClass: "metallic-sky" },
-              ].map((t) => (
-                <div key={t.name} className={`rounded-lg p-4 text-center ${t.cardClass}`}>
-                  <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${t.labelClass}`}>{t.name}</p>
-                  <p className={`text-2xl font-bold ${t.labelClass}`}>{formatCents(t.price)}</p>
-                  <p className="text-xs text-[var(--text-muted)] mt-1">{t.buyers}</p>
-                </div>
-              ))}
+              {(() => {
+                const styles = [
+                  { cardClass: "metallic-gold-card", labelClass: "metallic-gold" },
+                  { cardClass: "metallic-silver-card", labelClass: "metallic-silver" },
+                  { cardClass: "metallic-bronze-card", labelClass: "metallic-bronze" },
+                  { cardClass: "metallic-sky-card", labelClass: "metallic-sky" },
+                ];
+                const tiers = pricing?.tiers ?? [];
+                const buyersLabel = (n: number) => (n <= 1 ? "1 buyer" : `up to ${n} buyers`);
+                if (tiers.length === 0) {
+                  return <p className="col-span-2 md:col-span-4 text-sm text-[var(--text-muted)] text-center py-2">Loading pricing…</p>;
+                }
+                return tiers.map((t, i) => {
+                  const s = styles[i % styles.length];
+                  return (
+                    <div key={t.name} className={`rounded-lg p-4 text-center ${s.cardClass}`}>
+                      <p className={`text-xs font-bold uppercase tracking-wider mb-1 ${s.labelClass}`}>{t.name}</p>
+                      <p className={`text-2xl font-bold ${s.labelClass}`}>{formatCents(t.basePrice)}</p>
+                      <p className="text-xs text-[var(--text-muted)] mt-1">{buyersLabel(t.maxBuyers)}</p>
+                    </div>
+                  );
+                });
+              })()}
             </div>
           </div>
 
@@ -541,7 +660,7 @@ export default function AgentPortal() {
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-center">
                   <div>
-                    <p className="text-xl font-bold text-teal-cathedral">$120</p>
+                    <p className="text-xl font-bold text-teal-cathedral">{pricing ? formatCents(pricing.maxPrice) : "$120"}</p>
                     <p className="text-[10px] text-[var(--text-muted)]">Cost per Lead</p>
                   </div>
                   <div>
@@ -560,7 +679,7 @@ export default function AgentPortal() {
               <div className="rounded-lg p-5 border border-indigo-cathedral/10 bg-[var(--bg-surface)] opacity-75">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2 h-2 rounded-full bg-gray-400"></div>
-                  <p className="text-sm font-semibold text-[var(--text-muted)]">(Shared === 0 ? 0 : Typical Aged / Shared) Lead Vendors</p>
+                    <p className="text-sm font-semibold text-[var(--text-muted)]">Typical Aged and Shared Lead Vendors</p>
                 </div>
                 <div className="grid grid-cols-3 gap-3 text-center">
                   <div>
@@ -618,7 +737,7 @@ export default function AgentPortal() {
                     <path d="M2.25 8.25h19.5M2.25 9h19.5m-16.5 5.25h6m-6 2.25h3m-3.75 3h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5z" />
                   </svg>
                   <div>
-                    <p className="text-sm text-[var(--text-primary)] font-medium">(Debit === 0 ? 0 : Credit / Debit) Card</p>
+                        <p className="text-sm text-[var(--text-primary)] font-medium">Credit or Debit Card</p>
                     <p className="text-xs text-[var(--text-muted)]">Visa, Mastercard, Amex</p>
                   </div>
                 </div>
@@ -653,44 +772,6 @@ export default function AgentPortal() {
             </div>
           </div>
 
-          {/* Transaction History */}
-          <div className="cathedral-surface overflow-x-auto">
-            <div className="px-4 py-3 border-b border-indigo-cathedral/10">
-              <h3 className="text-sm metallic-gold uppercase tracking-wider">Transaction History</h3>
-            </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs uppercase tracking-wider border-b border-indigo-cathedral/10 text-[var(--text-muted)]">
-                  <th className="px-4 py-3">Period</th>
-                  <th className="px-4 py-3">Leads</th>
-                  <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {billing.length === 0 ? (
-                  <tr><td colSpan={4} className="px-4 py-8 text-center text-[var(--text-muted)]">No transactions yet. Purchase a lead to get started.</td></tr>
-                ) : (
-                  billing.map((b) => (
-                    <tr key={b.billingId} className="border-b border-indigo-cathedral/5">
-                      <td className="px-4 py-3 text-[var(--text-primary)] text-xs">
-                        {new Date(b.periodStart).toLocaleDateString()} — {new Date(b.periodEnd).toLocaleDateString()}
-                      </td>
-                      <td className="px-4 py-3 text-[var(--text-muted)]">{b.leadsPurchased}</td>
-                      <td className="px-4 py-3 text-[var(--text-primary)]">{formatCents(b.totalAmount)}</td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs border ${
-                          b.paymentStatus === "paid" ? "bg-emerald-50 text-emerald-700 border-emerald-200" :
-                          b.paymentStatus === "overdue" ? "bg-red-50 text-red-700 border-red-200" :
-                          "bg-amber-50 text-amber-700 border-amber-200"
-                        }`}>{b.paymentStatus}</span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
         </div>
       )}
 

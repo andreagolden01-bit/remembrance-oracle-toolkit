@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * IDE Integration — Editor Bridge
  *
@@ -324,7 +325,7 @@ class IDEBridge {
     const match = results.find(r => r.name === symbol);
     if (!match) return null;
 
-    return {
+    const __retVal = {
       patternId: match.id,
       name: match.name,
       language: match.language,
@@ -333,6 +334,19 @@ class IDEBridge {
       code: match.code,
       tags: match.tags,
     };
+    // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:bridge:getDefinition' });
+        break;
+      } catch (_) { quiet('ide:bridge:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('ide:bridge:__recordCost', _); /* best-effort */ }
+    return __retVal;
   }
 
   // ─── Find References ───

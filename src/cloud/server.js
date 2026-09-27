@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Cloud Sync Server — REST API + WebSocket for remote pattern storage.
  *
@@ -620,7 +621,7 @@ class CloudSyncServer {
       if (Date.now() - ws.lastActivity > WS_IDLE_TIMEOUT) {
         clearInterval(idleCheck);
         this.wsClients.delete(ws);
-        try { ws.socket.end(); } catch (_) {}
+        try { ws.socket.end(); } catch (_) { quiet('cloud:server:clearInterval', _);}
       }
     }, 60000);
 
@@ -811,3 +812,12 @@ module.exports = {
   hashPassword,
   verifyPassword,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+base64url.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+createToken.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "malevolent", domain: "utility" };
+verifyToken.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 16, period: 3, harmPotential: "none", alignment: "neutral", intention: "malevolent", domain: "utility" };
+hashPassword.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+verifyPassword.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

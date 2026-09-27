@@ -92,6 +92,7 @@ function scoreSelfSimilarity(code) {
 
   return Math.max(0, Math.min(1, score));
 }
+scoreSelfSimilarity.atomicProperties = { charge: -1, valence: 0, mass: "heavy", spin: "even", phase: "solid", reactivity: "low", electronegativity: 0, group: 13, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── 2. Boundary Depth (Mandelbrot) ───
 
@@ -142,6 +143,7 @@ function scoreBoundaryDepth(code) {
 
   return Math.max(0, Math.min(1, score));
 }
+scoreBoundaryDepth.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "degrading", intention: "neutral", domain: "utility" };
 
 // ─── 3. Growth Cascade (Barnsley) ───
 
@@ -181,6 +183,7 @@ function scoreGrowthCascade(code) {
 
   return Math.max(0, Math.min(1, score));
 }
+scoreGrowthCascade.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── 4. Stability Tuning (Julia) ───
 
@@ -217,6 +220,7 @@ function scoreStabilityTuning(code) {
 
   return Math.max(0, Math.min(1, score));
 }
+scoreStabilityTuning.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── 5. Order Navigation (Lyapunov) ───
 
@@ -257,6 +261,7 @@ function scoreOrderNavigation(code) {
 
   return Math.max(0, Math.min(1, score));
 }
+scoreOrderNavigation.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── Composite Fractal Alignment ───
 
@@ -270,12 +275,16 @@ function scoreOrderNavigation(code) {
  */
 function computeFractalAlignment(code, metadata = {}) {
   if (!code || typeof code !== 'string') {
-    return {
+    const __retVal = {
       dimensions: { selfSimilarity: 0, boundaryDepth: 0, growthCascade: 0, stabilityTuning: 0, orderNavigation: 0 },
       composite: 0,
       dominantFractal: 'none',
       resonanceMap: {},
     };
+    // field contribution removed: contributed composite, not a coherency.
+    // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+    // list treated any numeric-looking return field as a coherence signal.
+    return __retVal;
   }
 
   // Guard: for very large files, score a representative sample to avoid slow regex passes
@@ -320,6 +329,7 @@ function computeFractalAlignment(code, metadata = {}) {
     resonanceMap,
   };
 }
+computeFractalAlignment.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 5, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Select the most resonant fractal template for a given task/code.
@@ -359,6 +369,7 @@ function selectResonantFractal(code, taskDescription = '') {
     reason: `Code resonates with ${chosen.name}: ${chosen.role}`,
   };
 }
+selectResonantFractal.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   // Individual scorers

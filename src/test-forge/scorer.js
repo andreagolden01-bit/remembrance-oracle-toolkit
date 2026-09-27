@@ -22,11 +22,15 @@ class TestScorer {
    */
   score(testCode, code, language = 'javascript') {
     if (!testCode || !testCode.trim()) {
-      return {
+      const __retVal = {
         score: 0,
         dimensions: { assertions: 0, coverage: 0, edgeCases: 0, errorHandling: 0, diversity: 0 },
         suggestions: ['No test code provided — generate tests first'],
       };
+      // field contribution removed: contributed score, not a coherency.
+      // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+      // list treated any numeric-looking return field as a coherence signal.
+      return __retVal;
     }
 
     const dimensions = {

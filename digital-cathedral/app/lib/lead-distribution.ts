@@ -48,6 +48,17 @@ export async function distributeLead(
     skipped: [],
   };
 
+  // Revenue model = self-serve Stripe marketplace: buyers log in and purchase
+  // leads with a card. Auto-distribution (auto-assigning a lead to client
+  // accounts and billing them WITHOUT a Stripe payment) is OFF by default and
+  // opt-in via LEAD_AUTO_DISTRIBUTE=true. It is gated here because, when on, it
+  // creates "delivered" purchase rows with no payment and bypasses the
+  // oversell-guarded path — it must be reconciled with marketplace accounting
+  // and routed through the guard before use. Off => leads await self-serve sale.
+  if (process.env.LEAD_AUTO_DISTRIBUTE !== "true") {
+    return result;
+  }
+
   // Get all active clients
   const clientsResult = await getFilteredClients({ status: "active", limit: 200 });
   if (!clientsResult.ok || clientsResult.value.clients.length === 0) {
@@ -100,6 +111,16 @@ export async function distributeLead(
   return result;
 }
 
+function safeStringArray(value: string | null | undefined): string[] {
+  if (typeof value !== "string" || !value.trim()) return [];
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 async function matchClientToLead(
   client: ClientRecord,
   lead: LeadRecord,
@@ -111,13 +132,13 @@ async function matchClientToLead(
   }
 
   // Check state licenses
-  const licenses: string[] = JSON.parse(client.stateLicenses || "[]");
+  const licenses = safeStringArray(client.stateLicenses);
   if (licenses.length > 0 && !licenses.includes(lead.state)) {
     return { match: false, exclusive: false, reason: `Not licensed in ${lead.state}` };
   }
 
   // Check coverage types
-  const coverageTypes: string[] = JSON.parse(client.coverageTypes || "[]");
+  const coverageTypes = safeStringArray(client.coverageTypes);
   if (coverageTypes.length > 0 && !coverageTypes.includes(lead.coverageInterest)) {
     return { match: false, exclusive: false, reason: `Coverage ${lead.coverageInterest} not wanted` };
   }
@@ -142,13 +163,13 @@ async function matchClientToLead(
     const filters = filtersResult.value;
 
     // State filter
-    const filterStates: string[] = JSON.parse(filters.states || "[]");
+    const filterStates = safeStringArray(filters.states);
     if (filterStates.length > 0 && !filterStates.includes(lead.state)) {
       return { match: false, exclusive: false, reason: `State ${lead.state} not in filter` };
     }
 
     // Coverage filter
-    const filterCoverage: string[] = JSON.parse(filters.coverageTypes || "[]");
+    const filterCoverage = safeStringArray(filters.coverageTypes);
     if (filterCoverage.length > 0 && !filterCoverage.includes(lead.coverageInterest)) {
       return { match: false, exclusive: false, reason: `Coverage not in filter` };
     }

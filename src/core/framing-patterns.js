@@ -50,10 +50,13 @@ function checkFraming(code, filePath = '') {
     return { flagged: false, domain: null, disclaimerPresent: false, findings: [], skipped: 'self-reference' };
   }
   const findings = [];
+  // Expose camelCase / snake_case word boundaries so identifiers like
+  // `clinicalDiagnosis` or `legal_advice` trip the claim regex too.
+  const expanded = code.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
   for (const [domain, patterns] of Object.entries(DOMAIN_FRAMING_PATTERNS)) {
-    if (patterns.claim.test(code)) {
+    if (patterns.claim.test(expanded)) {
       const disclaimerPresent = patterns.disclaimer.test(code);
-      const matched = code.match(patterns.claim);
+      const matched = expanded.match(patterns.claim);
       findings.push({
         domain,
         disclaimerPresent,
@@ -75,21 +78,7 @@ function checkFraming(code, filePath = '') {
   };
 }
 
-checkFraming.atomicProperties = {
-  charge: 0,
-  valence: 2,
-  mass: 'medium',
-  spin: 'even',
-  phase: 'gas',
-  reactivity: 'reactive',
-  electronegativity: 0.85,
-  group: 18,
-  period: 7,
-  harmPotential: 'none',
-  alignment: 'healing',
-  intention: 'benevolent',
-  domain: 'covenant',
-};
+checkFraming.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 const PROPOSED_SEAL = {
   id: 16,

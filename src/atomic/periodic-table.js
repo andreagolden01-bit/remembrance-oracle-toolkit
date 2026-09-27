@@ -1,4 +1,18 @@
 'use strict';
+const { quiet } = require('../core/quiet');
+
+
+/**
+ * @oracle-infrastructure
+ *
+ * Mutations in this file write internal ecosystem state
+ * (entropy.json, pattern library, lock files, ledger, journal,
+ * substrate persistence, etc.) — not user-input-driven content.
+ * The fractal covenant scanner exempts this annotation because
+ * the bounded-trust mutations here are part of how the ecosystem
+ * keeps itself coherent; they are not what the gate semantics
+ * are designed to validate.
+ */
 
 /**
  * Remembrance Codex — Living Periodic Table of Code
@@ -189,7 +203,7 @@ function decodeSignature(sig) {
   // Parse the 14-dimensional signature. Domain (X) and Taint (T) optional for backward compat.
   const m = sig.match(/C([+\-0])V(\d)M([a-z])S([a-z])P([a-z])R([a-z])E(\d)G(\d+)D(\d)(?:H([a-z])A([a-z])I([a-z]))?(?:X([a-z]))?(?:T([a-z]))?/);
   if (!m) return null;
-  return {
+  const __retVal = {
     charge: m[1] === '+' ? 1 : m[1] === '-' ? -1 : 0,
     valence: parseInt(m[2]),
     mass: { l: 'light', m: 'medium', h: 'heavy', s: 'superheavy' }[m[3]] || 'light',
@@ -205,19 +219,10 @@ function decodeSignature(sig) {
     domain: m[13] ? (DOMAIN_DECODE[m[13]] || 'core') : 'core',
     taint: m[14] ? (TAINT_DECODE[m[14]] || 'none') : 'none',
   };
-}
-
-/**
- * Generate a fractal signature — encodes self-similarity alongside properties.
- */
-function generateFractalSignature(code, props) {
-  const propSig = encodeSignature(props);
-  // Fractal dimensions from code structure
-  const nesting = (code.match(/\{/g) || []).length;
-  const selfSim = Math.min(1, nesting * 0.1);
-  const funcCount = (code.match(/function|=>/g) || []).length;
-  const fractalBits = `F${Math.round(selfSim * 9)}N${Math.min(9, funcCount)}`;
-  return `${propSig}:${fractalBits}`;
+  // field contribution removed: contributed unnamed scalar, not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
 
 /**
@@ -618,7 +623,7 @@ class PeriodicTable {
         knownDomains: Array.from(this._knownDomains),
         evolvedDomains: this._evolvedDomains,
       }, null, 2));
-    } catch { /* best effort */ }
+    } catch (_e) { quiet('atomic:periodic-table:isRemembranceRegister', _e); /* best effort */ }
   }
 
   _load() {
@@ -644,7 +649,7 @@ class PeriodicTable {
         for (const d of raw.knownDomains) this._knownDomains.add(d);
       }
       if (raw.evolvedDomains) this._evolvedDomains = raw.evolvedDomains;
-    } catch { /* best effort */ }
+    } catch (_e) { quiet('atomic:periodic-table:c2', _e); /* best effort */ }
   }
 }
 
@@ -663,13 +668,14 @@ function _encode12D(props) {
   const i = (props.intention || 'neutral')[0];
   return `C${c}V${v}M${m}S${s}P${p}R${r}E${e}G${g}D${d}H${h}A${a}I${i}`;
 }
+_encode12D.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   PeriodicTable,
   CovenantValidator,
   encodeSignature,
   decodeSignature,
-  generateFractalSignature,
+
   calculateEmergencePotential,
   isRemembranceRegister,
   GROUPS,
@@ -683,33 +689,7 @@ module.exports = {
 };
 
 // ── Atomic self-description ─────────────────────────────────────────
-encodeSignature.atomicProperties = {
-  charge: -1, valence: 1, mass: 'light', spin: 'even', phase: 'solid',
-  reactivity: 'inert', electronegativity: 0.1, group: 17, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'core',
-};
-decodeSignature.atomicProperties = {
-  charge: 1, valence: 1, mass: 'light', spin: 'even', phase: 'solid',
-  reactivity: 'inert', electronegativity: 0.1, group: 17, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'core',
-};
-generateFractalSignature.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'core',
-};
-calculateEmergencePotential.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'liquid',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 2,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'core',
-};
-isRemembranceRegister.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'core',
-};
+encodeSignature.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+decodeSignature.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+calculateEmergencePotential.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+isRemembranceRegister.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

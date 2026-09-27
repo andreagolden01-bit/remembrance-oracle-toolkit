@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Atomic Property Extractor — analyzes code and produces atomic
@@ -12,7 +13,7 @@ function extractAtomicProperties(code, options = {}) {
   const tokens = safeTokenize(code);
   const lines = code.split('\n');
   const lineCount = lines.length;
-  return {
+  const __retVal = {
     charge: computeCharge(code, tokens),
     valence: computeValence(code, tokens),
     mass: computeMass(code, tokens, lineCount),
@@ -28,6 +29,30 @@ function extractAtomicProperties(code, options = {}) {
     domain: computeDomain(code, tokens, options),
     taint: computeTaint(code),
   };
+  // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { contribute: __contribute } = require(__p);
+        // Continuous coherence — was quantized to 3 bins (healing/harmful/neutral
+        // → 0.9/0.1/0.5), throwing away the rich 13-field atomic profile and
+        // averaging to ~0.51 across runs. The field signaled this as the heaviest
+        // drag. Now: weighted blend of (a) alignment direction (healing→1, harmful→0,
+        // neutral→0.5), (b) harm-potential safety, (c) inertness from electronegativity.
+        // Each in [0, 1]; weights sum to 1.
+        // field contribution removed: this blended alignment direction, harm
+        // potential and electronegativity-derived inertness. That is a SAFETY
+        // profile, deliberately designed and commented above — but it is not a
+        // coherency, and a coherency must come from the Void compressor. Kept
+        // here as a comment because the weighting was a considered choice worth
+        // preserving if it is ever wanted under its own name.
+        break;
+      } catch (_) { quiet('atomic:property-extractor:require', _); /* try next */ }
+    }
+  } catch (_) { quiet('atomic:property-extractor:require', _); /* best-effort */ }
+  return __retVal;
 }
 
 function computeCharge(code, tokens) {
@@ -220,9 +245,25 @@ function defaultProperties() {
 
 module.exports = { extractAtomicProperties };
 
-extractAtomicProperties.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'core',
-};
+extractAtomicProperties.atomicProperties = { charge: 0, valence: 2, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 13, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+computeCharge.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeValence.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 12, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeMass.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeSpin.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 1, harmPotential: "moderate", alignment: "neutral", intention: "neutral", domain: "utility" };
+computePhase.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 10, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeReactivity.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "high", electronegativity: 0, group: 2, period: 2, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeElectronegativity.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 12, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeGroup.atomicProperties = { charge: -1, valence: 0, mass: "medium", spin: "even", phase: "solid", reactivity: "medium", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computePeriod.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+countMatches.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 12, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+safeTokenize.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeHarmPotential.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 2, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "malevolent", domain: "utility" };
+computeAlignment.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "healing", intention: "malevolent", domain: "utility" };
+computeIntention.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };
+computeTaint.atomicProperties = { charge: 0, valence: 1, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeDomain.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+defaultProperties.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

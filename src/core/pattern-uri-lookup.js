@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('./quiet');
 
 /**
  * Pattern lookup by canonical coh:// URI.
@@ -24,6 +25,7 @@ const DEFAULT_DB_PATH = path.resolve(__dirname, '../../.remembrance/oracle.db');
 function _baseOf(uri) {
   return uri.split('#')[0].split('@')[0];
 }
+_baseOf.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 class PatternUriLookup {
   /**
@@ -54,20 +56,26 @@ class PatternUriLookup {
     }
     this.db = db;
     this._ownsConnection = ownsConnection;
-    this._stmt_exact_pat = this.db.prepare(
+    // Schema-tolerant preparation: each lookup surface is prepared only
+    // when this host's schema carries it. Partial-substrate hosts lack
+    // the uri column / the void_patterns bridge table entirely — there a
+    // missing surface must degrade to "no hit on that surface" (the
+    // module's own contract: none → null), never a construction crash.
+    const prep = (sql) => { try { return this.db.prepare(sql); } catch (_e) { return null; } };
+    this._stmt_exact_pat = prep(
       `SELECT id, name, language, code, coherency_total, uri
        FROM patterns WHERE uri = ? LIMIT 1`
     );
-    this._stmt_exact_void = this.db.prepare(
+    this._stmt_exact_void = prep(
       `SELECT uri, name, module, language, source, coherency_unified
        FROM void_patterns WHERE uri = ? LIMIT 1`
     );
-    this._stmt_base_pat = this.db.prepare(
+    this._stmt_base_pat = prep(
       `SELECT id, name, language, code, coherency_total, uri
        FROM patterns
        WHERE substr(uri, 1, ?) = ? LIMIT 1`
     );
-    this._stmt_base_void = this.db.prepare(
+    this._stmt_base_void = prep(
       `SELECT uri, name, module, language, source, coherency_unified
        FROM void_patterns
        WHERE substr(uri, 1, ?) = ? LIMIT 1`
@@ -82,24 +90,26 @@ class PatternUriLookup {
   lookup(uri) {
     if (!uri || !validate(uri)) return null;
 
-    let r = this._stmt_exact_pat.get(uri);
+    let r = this._stmt_exact_pat && this._stmt_exact_pat.get(uri);
     if (r) return { source: 'oracle', ...r };
-    r = this._stmt_exact_void.get(uri);
+    r = this._stmt_exact_void && this._stmt_exact_void.get(uri);
     if (r) return { source: 'void', ...r };
 
     const base = _baseOf(uri);
     const baseLen = base.length;
-    r = this._stmt_base_pat.get(baseLen, base);
+    r = this._stmt_base_pat && this._stmt_base_pat.get(baseLen, base);
     if (r) return { source: 'oracle', ...r };
-    r = this._stmt_base_void.get(baseLen, base);
+    r = this._stmt_base_void && this._stmt_base_void.get(baseLen, base);
     if (r) return { source: 'void', ...r };
     return null;
   }
 
-  /** Return URIs for every pattern in either table — both oracle/* and void/*. */
+  /** Return URIs for every pattern in either table — both oracle/* and void/*.
+   *  Surfaces this host's schema doesn't carry contribute nothing. */
   listAll() {
-    const oracleUris = this.db.prepare(`SELECT uri FROM patterns WHERE uri IS NOT NULL`).all();
-    const voidUris = this.db.prepare(`SELECT uri FROM void_patterns`).all();
+    const all = (sql) => { try { return this.db.prepare(sql).all(); } catch (_e) { return []; } };
+    const oracleUris = all(`SELECT uri FROM patterns WHERE uri IS NOT NULL`);
+    const voidUris = all(`SELECT uri FROM void_patterns`);
     return [
       ...oracleUris.map(r => r.uri),
       ...voidUris.map(r => r.uri),
@@ -110,7 +120,7 @@ class PatternUriLookup {
     const counts = {};
     for (const uri of this.listAll()) {
       try { counts[parseUri(uri).repo] = (counts[parseUri(uri).repo] || 0) + 1; }
-      catch { /* skip malformed */ }
+      catch (_e) { quiet('core:pattern-uri-lookup:all', _e); /* skip malformed */ }
     }
     return counts;
   }

@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../quiet');
 
 /**
  * Oracle ↔ Void Compressor auto-wire binding.
@@ -46,7 +47,7 @@ function wire(peer, opts = {}) {
       connectedAt: new Date().toISOString(),
       capabilities: peer.capabilities || [],
     });
-  } catch { /* non-fatal */ }
+  } catch (_e) { quiet('core:ecosystem-bindings:void:getStorage', _e); /* non-fatal */ }
 
   if (_installed) return;
 
@@ -75,7 +76,7 @@ function wire(peer, opts = {}) {
     bus.on('ecosystem.peer.lost', (p) => {
       if (p?.name === 'void-data-compressor') unwire();
     });
-  } catch { /* ignore */ }
+  } catch (_e) { quiet('core:ecosystem-bindings:void:getEventBus', _e); /* ignore */ }
 }
 
 function unwire() {
@@ -83,7 +84,7 @@ function unwire() {
   try {
     const prior = require('../../audit/bayesian-prior');
     if (_originalScorePrior) prior.scorePrior = _originalScorePrior;
-  } catch { /* ignore */ }
+  } catch (_e) { quiet('core:ecosystem-bindings:void:require', _e); /* ignore */ }
   _installed = false;
   _originalScorePrior = null;
   _voidEndpoint = null;
@@ -162,3 +163,11 @@ module.exports = {
   unwire,
   _trySubstrateCascade: trySubstrateCascade,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+wire.atomicProperties = { charge: 0, valence: 3, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+unwire.atomicProperties = { charge: 0, valence: 1, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+trySubstrateCascade.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+httpPostSync.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 1, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };

@@ -1,0 +1,95 @@
+# Unwired-Capability Adjudication Ledger
+
+**Source:** trap #24 sweep (2026-08-07) — 2,635 exports across 409 src files,
+refined to 120 functions with zero callers on any consumer path (in-file calls,
+src/scripts/bin, .github, packages, plugin and cathedral surfaces all checked).
+**Rule:** every item gets a verdict and a reason. A capability is only real when
+a consumer reaches it — but not every zero-caller function is debt; the verdict
+distinguishes the species.
+
+## Verdicts
+
+### WIRED (11) — done
+| item | wired into |
+|---|---|
+| 10 audit-pattern detectors (`src/patterns/audit-patterns/*`) | `auditCode` via `src/audit/pattern-detectors.js` bridge. 7 precise detectors default-on; 3 string-level ones (`null-property-access-guard`, `wrong-property-access`, `falsy-zero-coercion`) advisory-tier (`options.advisoryPatterns`) because the AST checkers already cover their classes with scope awareness — measured 558/582 of the noise. Shell detector taught to skip `db.exec` (SQL is the taint checker's territory). |
+| `updateVoterReputation` (sqlite) | `patternFeedback` — the reputation loop closes (071bde5). |
+
+### ELEMENT CORPUS (27) — keep; zero callers is by design
+- `src/utils/gap-filled.js` + `gap-filled-wave2.js` (25 fns): specified by the
+  periodic table's discovery loop to fill property-space gaps — existence is
+  the deliverable; adoption is organic (`deepEqual`: 58 callers). Headers now
+  say so, so future sweeps classify them out.
+- `sierpinskiDensity`, `barnsleyFern` (`src/fractals/engines.js`): fractal
+  mathematics corpus.
+
+### KEEP — declared API / partial-adoption library (24)
+| item | reason |
+|---|---|
+| `covenant-utils` 7 fns (`secureRandom`, `timeConstantCompare`, `maskEmail`, `rateLimitKey`, `tokenBucketCheck`, `validateOrigin`, `checksumBuffer`) | security utility library with organic adoption already underway (`hashString`, `sanitizeInput`: 26+ callers). |
+| `byteCodeToWaveform`, `byteWaveformCosine` | fractal-waveform header explicitly keeps byte-stretch "available under explicit `byte*` names for binary / non-textual inputs". |
+| `toFractalLadder`, `fractalCoherencyOfRecursive`, `fractalCoherencyMultiScale`, `composedCoherencyOf` | encoder-spec variant surface (FRACTAL_WAVEFORM_SPEC.md). |
+| `reconstructHierarchical`, `detectHierarchicalFamilies`, `decompressPattern` | compression library API. |
+| `recognizedShapeSignatures`, `localUpdateCount` (field-coupling) | field introspection accessors. |
+| `decodeSignature` (periodic-table), `getLastSearchTimestamp`, `safeFilename`, `getProductionSeeds`, `getProductionSeeds2` | introspection / data accessors on adopted modules. |
+| `formatMultiPRBody`, `parseCronInterval`, `getCircuitStatus` (reflector) | reflector feature surface behind the public `reflector*` wrappers. |
+| `registerFeedbackSignal`, `unifiedFieldMeasurement`, `quickAmplitude`, `shouldEntangle` | unified/quantum layer surface. |
+
+### WIRE-LATER — 3 of 8 wired 2026-08-08
+- `maybeAbsorbPattern` → WIRED into all three acceptance sites (submit /
+  register / evolve); first live absorption: both-accept, delta +0.278.
+  `maybeAbsorbBatch` reachable through the same module when a batch
+  caller exists.
+- `loadIgnoreFile` → WIRED into `auditFiles` via `options.repoRoot`
+  (.oracle-ignore support; no-file behavior byte-identical).
+- `checkFractalIntegrity` + `repairFractalIntegrity` → WIRED as
+  `oracle_maintain` actions `fractal-integrity` (read-only) and
+  `fractal-repair` (explicit mutation word required).
+
+### Wired 2026-08-08 (second pass)
+- `auditSourceForLies` → advisory detector `pattern/annotation-lie-gap` in
+  the bridge (flags atomic declarations that contradict the body).
+- `classifyDebugFix` → tags every auto-captured debug pattern with its
+  bug class at the capture site (ci/auto-debug).
+- `detectHiddenIdentifiers` → opt-in `options.hiddenIdentifiers` pass in
+  `voidScanFile` (subprocess-heavy, so never default-on).
+
+### Reclassified / still open (2)
+- `generateWithGate`: KEEP-API — its generatorFn producers live in
+  rmb-swarm; this is cross-repo surface, not an unwired hub feature.
+- `withOfflineQueue`: OPEN — wrapping syncToGlobal needs a design call on
+  which callers should tolerate offline queuing. Honest deferral.
+
+### (historical) Still WIRE-LATER — resolved above
+| item | natural consumer |
+|---|---|
+| `auditSourceForLies` (grounding-semantics) | goggles META-DEBUG / audit engine. |
+| `classifyDebugFix` (resolve-hook) | the resolve-hook pipeline. |
+| `detectHiddenIdentifiers` (void-indirection) | void-scan. |
+| `withOfflineQueue` (sync-queue) | persistence sync path. |
+| `generateWithGate` (swarm) | swarm generation entry. |
+
+### RETIRE — pending your approval (~50, all [DEAD]: no callers, no tests)
+Deletion is destructive and git is the only undo, so this batch executes only
+on an explicit go. Representative members (full list = the `deadTrue` minus
+keeps above): `seedCuratedLibrary` (superseded seeding path),
+`generateFractalSignature`, `allEntries`, `classificationStrength`,
+`diffCallGraphs`, `checkFiles`, `parseLanguage`, `jsonOrPrint`,
+`negotiateMulti`, `addNegotiationEndpoints`, `generateDispatchWorkflow`,
+`parseIssue`, `buildEvent`, covenant-spec accessors (`waveformConstant`,
+`principleById`, `structuralGates`, `domainsForUri`, `specPath`),
+`getCovenantCalibration`, `registerLayer`, `reflectionFeedback`,
+`contributeLayerAgreement`, function-record trio, `getPendingElements`,
+`setRunnerRegistry`, `getDensityState`, `sealReads`, `readingOf`, `selfTest`,
+`getModeInfo`, `crossVerify`, `withOperationalTrackingSync`,
+`requireRole`/`scopedAccess` (access-control — verify the dashboard doesn't
+reach them dynamically before deleting), `healQuick`/`healFull`/`healSweep`,
+`debugBridge`/`quantumScorer` (unified index re-exports), `trustedSources`,
+`isInfrastructureFile`, `isRecognizedPattern`, `recognizedPatterns`.
+
+## The refined species definition (feeds trap #24)
+Zero callers alone is a *lead*. The disease is **zero callers + intent to be
+called** (detectors, `updateVoterReputation`). Corpus existence
+(gap-filled), declared API surface, and spec variants are healthy
+zero-caller classes. The sweep must check in-file calls, all consumer
+surfaces, dynamic dispatch, and declared intent before pronouncing.

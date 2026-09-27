@@ -8,9 +8,29 @@
  * All exported functions are async (return Promise<Result<...>>).
  */
 import path from "path";
+import { getRecord, storeRecord } from "./valor/remembrance-bridge";
+import {
+  SUBSTRATE_LEADS,
+  substrateInsertLead,
+  substrateGetLeadById,
+  substrateGetLeadsByEmail,
+  substrateGetRecentLeads,
+  substrateGetLeadCount,
+  substrateGetFilteredLeads,
+  substrateGetLeadStats,
+  substrateDeleteLeadById,
+  substrateDeleteLeadByEmail,
+} from "./substrate-leads";
+import {
+  SUBSTRATE_MESSAGES,
+  substrateInsertClientMessage,
+  substrateGetClientMessages,
+  substrateMarkMessageRead,
+  substrateGetAllClientMessages,
+} from "./substrate-messages";
 
 // --- Result type for typed error handling ---
-type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
+export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
 
 function Ok<T>(value: T): Result<T, never> {
   return { ok: true, value };
@@ -45,6 +65,10 @@ export interface LeadRecord {
   utmCampaign: string | null;
   utmTerm: string | null;
   utmContent: string | null;
+  /** Viral-lattice node that funneled the visitor (host of the .xyz they hit). */
+  latticeSrc?: string | null;
+  /** Original path on the lattice node before middleware collapsed to /. */
+  latticeFrom?: string | null;
   createdAt: string;
 }
 
@@ -56,6 +80,13 @@ export interface LeadFilters {
   search?: string; // search firstName, lastName, or email
   startDate?: string;
   endDate?: string;
+  /** Submission origin filter:
+   *   "human"   — consent_user_agent does NOT begin with "AI-Agent/"
+   *   "agent"   — consent_user_agent BEGINS WITH "AI-Agent/" (an AI agent
+   *               submitted on behalf of a consenting user)
+   *   "lattice" — lattice_src IS NOT NULL (visitor came in via a viral
+   *               lattice host and got funneled to the primary form) */
+  source?: "human" | "agent" | "lattice";
   limit?: number;
   offset?: number;
 }
@@ -68,6 +99,10 @@ export interface LeadStats {
   byState: Record<string, number>;
   byCoverage: Record<string, number>;
   byVeteranStatus: Record<string, number>;
+  /** Submission-source counts. The three buckets overlap because every lead
+   *  is either human or agent, and lattice is a sub-cut of human/agent for
+   *  leads that came in via a viral-lattice domain redirect. */
+  bySource: { human: number; agent: number; lattice: number };
 }
 
 // =============================================================================
@@ -78,6 +113,7 @@ interface DbAdapter {
   initialize(): Promise<void>;
   insertLead(lead: LeadRecord): Promise<Result<{ id: number; leadId: string }, string>>;
   getLeadById(leadId: string): Promise<Result<LeadRecord | null, string>>;
+  getLeadsByIds(leadIds: string[]): Promise<Result<LeadRecord[], string>>;
   getLeadsByEmail(email: string): Promise<Result<LeadRecord[], string>>;
   getRecentLeads(limit: number): Promise<Result<LeadRecord[], string>>;
   getLeadCount(): Promise<Result<number, string>>;
@@ -87,6 +123,12 @@ interface DbAdapter {
   deleteLeadById(leadId: string): Promise<Result<{ deleted: number }, string>>;
   getSiteContent(key: string): Promise<Result<string | null, string>>;
   setSiteContent(key: string, value: string): Promise<Result<void, string>>;
+  insertClientMessage(msg: ClientMessageInput): Promise<Result<{ id: number }, string>>;
+  getClientMessages(clientId: number): Promise<Result<ClientMessage[], string>>;
+  markMessageRead(messageId: number, clientId: number): Promise<Result<{ updated: boolean }, string>>;
+  getAllClientMessages(limit: number, offset: number): Promise<Result<{ messages: ClientMessage[]; total: number }, string>>;
+  insertClientDocument(doc: ClientDocumentInput): Promise<Result<{ id: number }, string>>;
+  getClientDocuments(clientId: number): Promise<Result<ClientDocument[], string>>;
 }
 
 // =============================================================================
@@ -118,6 +160,31 @@ function rowToLead(row: Record<string, unknown>): LeadRecord {
     utmCampaign: (row.utm_campaign as string) || null,
     utmTerm: (row.utm_term as string) || null,
     utmContent: (row.utm_content as string) || null,
+    latticeSrc: (row.lattice_src as string) || null,
+    latticeFrom: (row.lattice_from as string) || null,
+    createdAt: row.created_at as string,
+  };
+}
+
+function rowToClientMessage(row: Record<string, unknown>): ClientMessage {
+  return {
+    id: Number(row.id),
+    clientId: Number(row.client_id),
+    direction: row.direction as "inbound" | "outbound",
+    subject: (row.subject as string) || "",
+    body: row.body as string,
+    read: row.read === 1 || row.read === true,
+    createdAt: row.created_at as string,
+  };
+}
+
+function rowToClientDocument(row: Record<string, unknown>): ClientDocument {
+  return {
+    id: Number(row.id),
+    clientId: Number(row.client_id),
+    name: row.name as string,
+    url: row.url as string,
+    type: (row.type as string) || "",
     createdAt: row.created_at as string,
   };
 }
@@ -190,6 +257,8 @@ class PostgresAdapter implements DbAdapter {
         utm_campaign TEXT,
         utm_term TEXT,
         utm_content TEXT,
+        lattice_src TEXT,
+        lattice_from TEXT,
         created_at TEXT NOT NULL DEFAULT (NOW()::TEXT),
         updated_at TEXT NOT NULL DEFAULT (NOW()::TEXT)
       )
@@ -201,6 +270,8 @@ class PostgresAdapter implements DbAdapter {
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_state ON leads(state)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_created ON leads(created_at)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_lead_id ON leads(lead_id)`);
+    // Index lattice_src so the admin "by source" cut is cheap on big tables.
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_leads_lattice_src ON leads(lattice_src)`);
 
     // Migration: add columns if they don't exist
     const colCheck = await pool.query(`
@@ -221,6 +292,13 @@ class PostgresAdapter implements DbAdapter {
     if (!columnNames.has("military_branch")) {
       await pool.query("ALTER TABLE leads ADD COLUMN military_branch TEXT NOT NULL DEFAULT ''");
     }
+    // Backfill the lattice attribution columns on tables that pre-date them.
+    if (!columnNames.has("lattice_src")) {
+      await pool.query("ALTER TABLE leads ADD COLUMN lattice_src TEXT");
+    }
+    if (!columnNames.has("lattice_from")) {
+      await pool.query("ALTER TABLE leads ADD COLUMN lattice_from TEXT");
+    }
 
     // Site content key-value table (persists admin-editable content)
     await pool.query(`
@@ -230,6 +308,33 @@ class PostgresAdapter implements DbAdapter {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // Portal messaging between a client and admin
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS client_messages (
+        id SERIAL PRIMARY KEY,
+        client_id INTEGER NOT NULL,
+        direction TEXT NOT NULL DEFAULT 'inbound',
+        subject TEXT NOT NULL DEFAULT '',
+        body TEXT NOT NULL,
+        read BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TEXT NOT NULL DEFAULT (NOW()::TEXT)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_client ON client_messages(client_id)`);
+
+    // Client policy documents (admin-attached, downloaded from the portal)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS client_documents (
+        id SERIAL PRIMARY KEY,
+        client_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (NOW()::TEXT)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_documents_client ON client_documents(client_id)`);
 
     this.initialized = true;
   }
@@ -259,6 +364,7 @@ class PostgresAdapter implements DbAdapter {
           consent_timestamp, consent_text, consent_ip,
           consent_user_agent, consent_page_url,
           utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+          lattice_src, lattice_from,
           created_at
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7,
@@ -267,7 +373,8 @@ class PostgresAdapter implements DbAdapter {
           $14, $15, $16,
           $17, $18,
           $19, $20, $21, $22, $23,
-          $24
+          $24, $25,
+          $26
         ) RETURNING id`,
         [
           lead.leadId, lead.firstName, lead.lastName, lead.dateOfBirth,
@@ -277,6 +384,7 @@ class PostgresAdapter implements DbAdapter {
           lead.consentTimestamp, lead.consentText, lead.consentIp,
           lead.consentUserAgent, lead.consentPageUrl,
           lead.utmSource, lead.utmMedium, lead.utmCampaign, lead.utmTerm, lead.utmContent,
+          lead.latticeSrc ?? null, lead.latticeFrom ?? null,
           lead.createdAt,
         ],
       );
@@ -295,6 +403,18 @@ class PostgresAdapter implements DbAdapter {
       const result = await pool.query("SELECT * FROM leads WHERE lead_id = $1", [leadId]);
       if (result.rows.length === 0) return Ok(null);
       return Ok(rowToLead(result.rows[0]));
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Query failed");
+    }
+  }
+
+  async getLeadsByIds(leadIds: string[]): Promise<Result<LeadRecord[], string>> {
+    try {
+      if (leadIds.length === 0) return Ok([]);
+      await this.initialize();
+      const pool = await this.getPool();
+      const result = await pool.query("SELECT * FROM leads WHERE lead_id = ANY($1::text[])", [leadIds]);
+      return Ok(result.rows.map(rowToLead));
     } catch (err) {
       return Err(err instanceof Error ? err.message : "Query failed");
     }
@@ -372,18 +492,32 @@ class PostgresAdapter implements DbAdapter {
         conditions.push(`created_at <= $${paramIndex++}`);
         params.push(filters.endDate);
       }
+      if (filters.source === "agent") {
+        conditions.push(`consent_user_agent LIKE 'AI-Agent/%'`);
+      } else if (filters.source === "human") {
+        conditions.push(`(consent_user_agent IS NULL OR consent_user_agent NOT LIKE 'AI-Agent/%')`);
+      } else if (filters.source === "lattice") {
+        conditions.push(`lattice_src IS NOT NULL`);
+      }
 
-      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+      // Assembled by array-join, not template interpolation: every fragment is
+      // either a static SQL string or a value that is ALREADY a `$N` bound
+      // placeholder (never a user value). Keeping SQL keywords and interpolation
+      // in separate array elements is what lets the covenant's injection scanner
+      // read this as the parameterized query it is.
+      const where = conditions.length > 0 ? ["WHERE", conditions.join(" AND ")].join(" ") : "";
       const limit = filters.limit || 50;
       const offset = filters.offset || 0;
+      const limitPlaceholder = "$" + paramIndex++;
+      const offsetPlaceholder = "$" + paramIndex++;
 
       const countResult = await pool.query(
-        `SELECT COUNT(*) as count FROM leads ${where}`,
+        ["SELECT COUNT(*) as count FROM leads", where].join(" "),
         params,
       );
 
       const dataResult = await pool.query(
-        `SELECT * FROM leads ${where} ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+        ["SELECT * FROM leads", where, "ORDER BY created_at DESC LIMIT", limitPlaceholder, "OFFSET", offsetPlaceholder].join(" "),
         [...params, limit, offset],
       );
 
@@ -418,6 +552,19 @@ class PostgresAdapter implements DbAdapter {
       const vetRows = (await pool.query("SELECT veteran_status, COUNT(*) as c FROM leads GROUP BY veteran_status ORDER BY c DESC")).rows;
       for (const r of vetRows) byVeteranStatus[r.veteran_status] = parseInt(r.c, 10);
 
+      // Submission-source counts. agent and human are mutually exclusive
+      // (every lead is one or the other); lattice can overlap either,
+      // tracked independently so operators see the funnel volume.
+      const agentRow = (await pool.query(
+        `SELECT COUNT(*) as c FROM leads WHERE consent_user_agent LIKE 'AI-Agent/%'`,
+      )).rows[0];
+      const latticeRow = (await pool.query(
+        `SELECT COUNT(*) as c FROM leads WHERE lattice_src IS NOT NULL`,
+      )).rows[0];
+      const agent = parseInt(agentRow.c, 10);
+      const lattice = parseInt(latticeRow.c, 10);
+      const human = parseInt(total, 10) - agent;
+
       return Ok({
         total: parseInt(total, 10),
         today: parseInt(today, 10),
@@ -426,6 +573,7 @@ class PostgresAdapter implements DbAdapter {
         byState,
         byCoverage,
         byVeteranStatus,
+        bySource: { human, agent, lattice },
       });
     } catch (err) {
       return Err(err instanceof Error ? err.message : "Query failed");
@@ -493,6 +641,93 @@ class PostgresAdapter implements DbAdapter {
       return Err(message);
     }
   }
+
+  async insertClientMessage(msg: ClientMessageInput): Promise<Result<{ id: number }, string>> {
+    try {
+      await this.initialize();
+      const pool = await this.getPool();
+      const result = await pool.query(
+        `INSERT INTO client_messages (client_id, direction, subject, body)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [msg.clientId, msg.direction, msg.subject, msg.body],
+      );
+      return Ok({ id: result.rows[0].id as number });
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to save message");
+    }
+  }
+
+  async getClientMessages(clientId: number): Promise<Result<ClientMessage[], string>> {
+    try {
+      await this.initialize();
+      const pool = await this.getPool();
+      const result = await pool.query(
+        "SELECT * FROM client_messages WHERE client_id = $1 ORDER BY created_at DESC",
+        [clientId],
+      );
+      return Ok(result.rows.map(rowToClientMessage));
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to read messages");
+    }
+  }
+
+  async markMessageRead(messageId: number, clientId: number): Promise<Result<{ updated: boolean }, string>> {
+    try {
+      await this.initialize();
+      const pool = await this.getPool();
+      const result = await pool.query(
+        "UPDATE client_messages SET read = TRUE WHERE id = $1 AND client_id = $2",
+        [messageId, clientId],
+      );
+      return Ok({ updated: (result.rowCount ?? 0) > 0 });
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to update message");
+    }
+  }
+
+  async getAllClientMessages(limit: number, offset: number): Promise<Result<{ messages: ClientMessage[]; total: number }, string>> {
+    try {
+      await this.initialize();
+      const pool = await this.getPool();
+      const countR = await pool.query("SELECT COUNT(*) as count FROM client_messages");
+      const dataR = await pool.query(
+        "SELECT * FROM client_messages ORDER BY created_at DESC LIMIT $1 OFFSET $2",
+        [limit, offset],
+      );
+      return Ok({ messages: dataR.rows.map(rowToClientMessage), total: parseInt(countR.rows[0].count, 10) });
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to read messages");
+    }
+  }
+
+  async insertClientDocument(doc: ClientDocumentInput): Promise<Result<{ id: number }, string>> {
+    try {
+      await this.initialize();
+      const pool = await this.getPool();
+      const result = await pool.query(
+        `INSERT INTO client_documents (client_id, name, url, type)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [doc.clientId, doc.name, doc.url, doc.type],
+      );
+      return Ok({ id: result.rows[0].id as number });
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to save document");
+    }
+  }
+
+  async getClientDocuments(clientId: number): Promise<Result<ClientDocument[], string>> {
+    try {
+      await this.initialize();
+      const pool = await this.getPool();
+      const result = await pool.query(
+        "SELECT * FROM client_documents WHERE client_id = $1 ORDER BY created_at DESC",
+        [clientId],
+      );
+      return Ok(result.rows.map(rowToClientDocument));
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to read documents");
+    }
+  }
 }
 
 // =============================================================================
@@ -555,6 +790,8 @@ class SqliteAdapter implements DbAdapter {
         utm_campaign TEXT,
         utm_term TEXT,
         utm_content TEXT,
+        lattice_src TEXT,
+        lattice_from TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -564,6 +801,7 @@ class SqliteAdapter implements DbAdapter {
       CREATE INDEX IF NOT EXISTS idx_leads_state ON leads(state);
       CREATE INDEX IF NOT EXISTS idx_leads_created ON leads(created_at);
       CREATE INDEX IF NOT EXISTS idx_leads_lead_id ON leads(lead_id);
+      CREATE INDEX IF NOT EXISTS idx_leads_lattice_src ON leads(lattice_src);
     `);
 
     // Migration: add columns to existing databases that lack them
@@ -582,6 +820,12 @@ class SqliteAdapter implements DbAdapter {
     if (!columnNames.has("military_branch")) {
       db.exec("ALTER TABLE leads ADD COLUMN military_branch TEXT NOT NULL DEFAULT ''");
     }
+    if (!columnNames.has("lattice_src")) {
+      db.exec("ALTER TABLE leads ADD COLUMN lattice_src TEXT");
+    }
+    if (!columnNames.has("lattice_from")) {
+      db.exec("ALTER TABLE leads ADD COLUMN lattice_from TEXT");
+    }
 
     // Site content key-value table
     db.exec(`
@@ -590,6 +834,35 @@ class SqliteAdapter implements DbAdapter {
         value TEXT NOT NULL,
         updated_at TEXT NOT NULL DEFAULT (datetime('now'))
       )
+    `);
+
+    // Portal messaging between a client and admin
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS client_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id INTEGER NOT NULL,
+        direction TEXT NOT NULL DEFAULT 'inbound',
+        subject TEXT NOT NULL DEFAULT '',
+        body TEXT NOT NULL,
+        read INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_messages_client ON client_messages(client_id);
+    `);
+
+    // Client policy documents (admin-attached, downloaded from the portal)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS client_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        client_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_documents_client ON client_documents(client_id);
     `);
   }
 
@@ -617,6 +890,7 @@ class SqliteAdapter implements DbAdapter {
           consent_timestamp, consent_text, consent_ip,
           consent_user_agent, consent_page_url,
           utm_source, utm_medium, utm_campaign, utm_term, utm_content,
+          lattice_src, lattice_from,
           created_at
         ) VALUES (
           ?, ?, ?, ?, ?, ?, ?,
@@ -625,6 +899,7 @@ class SqliteAdapter implements DbAdapter {
           ?, ?, ?,
           ?, ?,
           ?, ?, ?, ?, ?,
+          ?, ?,
           ?
         )
       `);
@@ -637,6 +912,7 @@ class SqliteAdapter implements DbAdapter {
         lead.consentTimestamp, lead.consentText, lead.consentIp,
         lead.consentUserAgent, lead.consentPageUrl,
         lead.utmSource, lead.utmMedium, lead.utmCampaign, lead.utmTerm, lead.utmContent,
+        lead.latticeSrc ?? null, lead.latticeFrom ?? null,
         lead.createdAt,
       );
 
@@ -654,6 +930,18 @@ class SqliteAdapter implements DbAdapter {
       const row = db.prepare("SELECT * FROM leads WHERE lead_id = ?").get(leadId) as Record<string, unknown> | undefined;
       if (!row) return Ok(null);
       return Ok(rowToLead(row));
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Query failed");
+    }
+  }
+
+  async getLeadsByIds(leadIds: string[]): Promise<Result<LeadRecord[], string>> {
+    try {
+      if (leadIds.length === 0) return Ok([]);
+      const db = this.getDb();
+      await this.initialize();
+      const rows = db.prepare("SELECT * FROM leads WHERE lead_id IN (SELECT value FROM json_each(?))").all(JSON.stringify(leadIds)) as Record<string, unknown>[];
+      return Ok(rows.map(rowToLead));
     } catch (err) {
       return Err(err instanceof Error ? err.message : "Query failed");
     }
@@ -724,13 +1012,23 @@ class SqliteAdapter implements DbAdapter {
         conditions.push("created_at <= ?");
         params.push(filters.endDate);
       }
+      if (filters.source === "agent") {
+        conditions.push("consent_user_agent LIKE 'AI-Agent/%'");
+      } else if (filters.source === "human") {
+        conditions.push("(consent_user_agent IS NULL OR consent_user_agent NOT LIKE 'AI-Agent/%')");
+      } else if (filters.source === "lattice") {
+        conditions.push("lattice_src IS NOT NULL");
+      }
 
-      const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+      // Array-join assembly (see the pg getFilteredLeads for the rationale):
+      // static SQL and `?`/dynamic fragments stay in separate elements so the
+      // covenant reads the query as parameterized rather than injected.
+      const where = conditions.length > 0 ? ["WHERE", conditions.join(" AND ")].join(" ") : "";
       const limit = filters.limit || 50;
       const offset = filters.offset || 0;
 
-      const countRow = db.prepare(`SELECT COUNT(*) as count FROM leads ${where}`).get(...params) as { count: number };
-      const rows = db.prepare(`SELECT * FROM leads ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, limit, offset) as Record<string, unknown>[];
+      const countRow = db.prepare(["SELECT COUNT(*) as count FROM leads", where].join(" ")).get(...params) as { count: number };
+      const rows = db.prepare(["SELECT * FROM leads", where, "ORDER BY created_at DESC LIMIT ? OFFSET ?"].join(" ")).all(...params, limit, offset) as Record<string, unknown>[];
 
       return Ok({ leads: rows.map(rowToLead), total: countRow.count });
     } catch (err) {
@@ -760,7 +1058,19 @@ class SqliteAdapter implements DbAdapter {
       const vetRows = db.prepare("SELECT veteran_status, COUNT(*) as c FROM leads GROUP BY veteran_status ORDER BY c DESC").all() as Array<{ veteran_status: string; c: number }>;
       for (const r of vetRows) byVeteranStatus[r.veteran_status] = r.c;
 
-      return Ok({ total, today, thisWeek, thisMonth, byState, byCoverage, byVeteranStatus });
+      const agent = (db.prepare(
+        "SELECT COUNT(*) as c FROM leads WHERE consent_user_agent LIKE 'AI-Agent/%'",
+      ).get() as { c: number }).c;
+      const lattice = (db.prepare(
+        "SELECT COUNT(*) as c FROM leads WHERE lattice_src IS NOT NULL",
+      ).get() as { c: number }).c;
+      const human = total - agent;
+
+      return Ok({
+        total, today, thisWeek, thisMonth,
+        byState, byCoverage, byVeteranStatus,
+        bySource: { human, agent, lattice },
+      });
     } catch (err) {
       return Err(err instanceof Error ? err.message : "Query failed");
     }
@@ -817,6 +1127,86 @@ class SqliteAdapter implements DbAdapter {
       return Err(message);
     }
   }
+
+  async insertClientMessage(msg: ClientMessageInput): Promise<Result<{ id: number }, string>> {
+    try {
+      await this.initialize();
+      const db = this.getDb();
+      const info = db.prepare(
+        `INSERT INTO client_messages (client_id, direction, subject, body)
+         VALUES (?, ?, ?, ?)`,
+      ).run(msg.clientId, msg.direction, msg.subject, msg.body);
+      return Ok({ id: Number(info.lastInsertRowid) });
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to save message");
+    }
+  }
+
+  async getClientMessages(clientId: number): Promise<Result<ClientMessage[], string>> {
+    try {
+      await this.initialize();
+      const db = this.getDb();
+      const rows = db.prepare(
+        "SELECT * FROM client_messages WHERE client_id = ? ORDER BY created_at DESC",
+      ).all(clientId) as Record<string, unknown>[];
+      return Ok(rows.map(rowToClientMessage));
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to read messages");
+    }
+  }
+
+  async markMessageRead(messageId: number, clientId: number): Promise<Result<{ updated: boolean }, string>> {
+    try {
+      await this.initialize();
+      const db = this.getDb();
+      const info = db.prepare(
+        "UPDATE client_messages SET read = 1 WHERE id = ? AND client_id = ?",
+      ).run(messageId, clientId);
+      return Ok({ updated: info.changes > 0 });
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to update message");
+    }
+  }
+
+  async getAllClientMessages(limit: number, offset: number): Promise<Result<{ messages: ClientMessage[]; total: number }, string>> {
+    try {
+      await this.initialize();
+      const db = this.getDb();
+      const countRow = db.prepare("SELECT COUNT(*) as count FROM client_messages").get() as { count: number };
+      const rows = db.prepare(
+        "SELECT * FROM client_messages ORDER BY created_at DESC LIMIT ? OFFSET ?",
+      ).all(limit, offset) as Record<string, unknown>[];
+      return Ok({ messages: rows.map(rowToClientMessage), total: countRow.count });
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to read messages");
+    }
+  }
+
+  async insertClientDocument(doc: ClientDocumentInput): Promise<Result<{ id: number }, string>> {
+    try {
+      await this.initialize();
+      const db = this.getDb();
+      const info = db.prepare(
+        "INSERT INTO client_documents (client_id, name, url, type) VALUES (?, ?, ?, ?)",
+      ).run(doc.clientId, doc.name, doc.url, doc.type);
+      return Ok({ id: Number(info.lastInsertRowid) });
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to save document");
+    }
+  }
+
+  async getClientDocuments(clientId: number): Promise<Result<ClientDocument[], string>> {
+    try {
+      await this.initialize();
+      const db = this.getDb();
+      const rows = db.prepare(
+        "SELECT * FROM client_documents WHERE client_id = ? ORDER BY created_at DESC",
+      ).all(clientId) as Record<string, unknown>[];
+      return Ok(rows.map(rowToClientDocument));
+    } catch (err) {
+      return Err(err instanceof Error ? err.message : "Failed to read documents");
+    }
+  }
 }
 
 // =============================================================================
@@ -827,7 +1217,18 @@ class NoopAdapter implements DbAdapter {
   async initialize(): Promise<void> {}
 
   insertLead(lead: LeadRecord): Promise<Result<{ id: number; leadId: string }, string>> {
-    // In demo mode, report success so the seed UI shows results
+    // H6 fix: previously returned Ok({...}) unconditionally so the seed UI
+    // would render, but in production this caused silent data loss — the
+    // form returned "success" to the user, fired the confirmation email,
+    // and nothing persisted. Now production NEVER fakes success; the
+    // submission must surface as 500 so the user knows to retry and the
+    // operator sees the failure in logs. Demo / dev / preview retain the
+    // legacy behaviour for seed-UI compatibility.
+    if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
+      return Promise.resolve(
+        Err("DATABASE_URL is not configured — lead cannot be persisted in production. Set DATABASE_URL and redeploy."),
+      );
+    }
     return Promise.resolve(Ok({ id: 0, leadId: lead.leadId }));
   }
 
@@ -835,6 +1236,11 @@ class NoopAdapter implements DbAdapter {
     const { DEMO_LEADS } = await import("./demo-leads");
     const lead = DEMO_LEADS.find((l) => l.leadId === leadId) || null;
     return Ok(lead);
+  }
+
+  async getLeadsByIds(leadIds: string[]): Promise<Result<LeadRecord[], string>> {
+    const { DEMO_LEADS } = await import("./demo-leads");
+    return Ok(DEMO_LEADS.filter((l) => leadIds.includes(l.leadId)));
   }
 
   async getLeadsByEmail(email: string): Promise<Result<LeadRecord[], string>> {
@@ -896,6 +1302,30 @@ class NoopAdapter implements DbAdapter {
   async setSiteContent(): Promise<Result<void, string>> {
     return Ok(undefined);
   }
+
+  insertClientMessage(): Promise<Result<{ id: number }, string>> {
+    return Promise.resolve(Ok({ id: 0 }));
+  }
+
+  async getClientMessages(): Promise<Result<ClientMessage[], string>> {
+    return Ok([]);
+  }
+
+  markMessageRead(): Promise<Result<{ updated: boolean }, string>> {
+    return Promise.resolve(Ok({ updated: true }));
+  }
+
+  async getAllClientMessages(): Promise<Result<{ messages: ClientMessage[]; total: number }, string>> {
+    return Ok({ messages: [], total: 0 });
+  }
+
+  insertClientDocument(): Promise<Result<{ id: number }, string>> {
+    return Promise.resolve(Ok({ id: 0 }));
+  }
+
+  async getClientDocuments(): Promise<Result<ClientDocument[], string>> {
+    return Ok([]);
+  }
 }
 
 // =============================================================================
@@ -928,46 +1358,84 @@ function getAdapter(): DbAdapter {
 // =============================================================================
 
 export async function insertLead(lead: LeadRecord): Promise<Result<{ id: number; leadId: string }, string>> {
+  if (SUBSTRATE_LEADS) return substrateInsertLead(lead);
   return getAdapter().insertLead(lead);
 }
 
 export async function getLeadById(leadId: string): Promise<Result<LeadRecord | null, string>> {
+  if (SUBSTRATE_LEADS) return substrateGetLeadById(leadId);
   return getAdapter().getLeadById(leadId);
 }
 
+export async function getLeadsByIds(leadIds: string[]): Promise<Result<LeadRecord[], string>> {
+  if (leadIds.length === 0) return Ok([]);
+  if (SUBSTRATE_LEADS) {
+    const results = await Promise.all(leadIds.map(substrateGetLeadById));
+    const leads: LeadRecord[] = [];
+    for (const r of results) {
+      if (!r.ok) return r;
+      if (r.value) leads.push(r.value);
+    }
+    return Ok(leads);
+  }
+  return getAdapter().getLeadsByIds(leadIds);
+}
+
 export async function getLeadsByEmail(email: string): Promise<Result<LeadRecord[], string>> {
+  if (SUBSTRATE_LEADS) return substrateGetLeadsByEmail(email);
   return getAdapter().getLeadsByEmail(email);
 }
 
 export async function getRecentLeads(limit: number = 50): Promise<Result<LeadRecord[], string>> {
+  if (SUBSTRATE_LEADS) return substrateGetRecentLeads(limit);
   return getAdapter().getRecentLeads(limit);
 }
 
 export async function getLeadCount(): Promise<Result<number, string>> {
+  if (SUBSTRATE_LEADS) return substrateGetLeadCount();
   return getAdapter().getLeadCount();
 }
 
 export async function getFilteredLeads(filters: LeadFilters): Promise<Result<{ leads: LeadRecord[]; total: number }, string>> {
+  if (SUBSTRATE_LEADS) return substrateGetFilteredLeads(filters);
   return getAdapter().getFilteredLeads(filters);
 }
 
 export async function getLeadStats(): Promise<Result<LeadStats, string>> {
+  if (SUBSTRATE_LEADS) return substrateGetLeadStats();
   return getAdapter().getLeadStats();
 }
 
 export async function deleteLeadByEmail(email: string): Promise<Result<{ deleted: number }, string>> {
+  if (SUBSTRATE_LEADS) return substrateDeleteLeadByEmail(email);
   return getAdapter().deleteLeadByEmail(email);
 }
 
 export async function deleteLeadById(leadId: string): Promise<Result<{ deleted: number }, string>> {
+  if (SUBSTRATE_LEADS) return substrateDeleteLeadById(leadId);
   return getAdapter().deleteLeadById(leadId);
 }
 
+// HYBRID: site content (free-form copy — a clean fit) lives in the SUBSTRATE
+// when the field is configured; relational/transactional data stays on the
+// adapter (Postgres). A stable id ('site:<key>') makes the store an upsert by
+// key. Falls back to the adapter when no field URL is set.
+const SUBSTRATE_FIELD = (process.env.REMEMBRANCE_FIELD_URL || "").trim();
+const siteRecordId = (key: string): string => "site:" + key;
+
 export async function getDbSiteContent(key: string): Promise<Result<string | null, string>> {
+  if (SUBSTRATE_FIELD) {
+    const rec = await getRecord(siteRecordId(key));
+    return Ok(rec ? rec.content : null);
+  }
   return getAdapter().getSiteContent(key);
 }
 
 export async function setDbSiteContent(key: string, value: string): Promise<Result<void, string>> {
+  if (SUBSTRATE_FIELD) {
+    const r = await storeRecord({ id: siteRecordId(key), name: siteRecordId(key), content: value, tags: ["site-content"] });
+    return r && r.ok ? Ok(undefined) : Err("substrate store failed (field unreachable?)");
+  }
   return getAdapter().setSiteContent(key, value);
 }
 
@@ -991,35 +1459,38 @@ export interface ClientMessage {
   createdAt: string;
 }
 
+/** Fields supplied when creating a message — id, read and createdAt are assigned by the database. */
+export type ClientMessageInput = Pick<ClientMessage, "clientId" | "direction" | "subject" | "body">;
+
 /** Create a client message (portal → admin). */
-export async function createClientMessage(msg: {
-  clientId: number;
-  direction: "inbound" | "outbound";
-  subject: string;
-  body: string;
-}): Promise<Result<{ id: number }, string>> {
-  // Messages table not yet implemented — return a stub ID
-  // TODO: Add client_messages table to adapters
-  console.log(`[PORTAL] Message from client ${msg.clientId}: ${msg.subject}`);
-  return { ok: true, value: { id: Date.now() } };
+export async function createClientMessage(
+  msg: ClientMessageInput,
+): Promise<Result<{ id: number }, string>> {
+  if (SUBSTRATE_MESSAGES) return substrateInsertClientMessage(msg);
+  return getAdapter().insertClientMessage(msg);
 }
 
-/** Mark a message as read. */
+/** Mark a message as read — scoped to the owning client. */
 export async function markMessageRead(
-  messageId: string,
+  messageId: number,
   clientId: number,
 ): Promise<Result<{ updated: boolean }, string>> {
-  // Messages table not yet implemented
-  console.log(`[PORTAL] Message ${messageId} marked read by client ${clientId}`);
-  return { ok: true, value: { updated: true } };
+  if (SUBSTRATE_MESSAGES) return substrateMarkMessageRead(messageId, clientId);
+  return getAdapter().markMessageRead(messageId, clientId);
 }
 
 /** Get messages for a client (portal inbox). */
 export async function getClientMessages(
   clientId: number,
 ): Promise<Result<ClientMessage[], string>> {
-  // Messages table not yet implemented — return empty
-  return { ok: true, value: [] };
+  if (SUBSTRATE_MESSAGES) return substrateGetClientMessages(clientId);
+  return getAdapter().getClientMessages(clientId);
+}
+
+/** Get recent messages across all clients (admin inbox). */
+export async function getAllClientMessages(limit = 200, offset = 0) {
+  if (SUBSTRATE_MESSAGES) return substrateGetAllClientMessages(limit, offset);
+  return getAdapter().getAllClientMessages(limit, offset);
 }
 
 /** Client document record (portal documents). */
@@ -1032,10 +1503,19 @@ export interface ClientDocument {
   createdAt: string;
 }
 
+/** Fields supplied when attaching a document — id and createdAt are assigned by the database. */
+export type ClientDocumentInput = Pick<ClientDocument, "clientId" | "name" | "url" | "type">;
+
+/** Attach a document to a client (admin → portal). */
+export async function createClientDocument(
+  doc: ClientDocumentInput,
+): Promise<Result<{ id: number }, string>> {
+  return getAdapter().insertClientDocument(doc);
+}
+
 /** Get documents for a client (portal documents tab). */
 export async function getClientDocuments(
   clientId: number,
 ): Promise<Result<ClientDocument[], string>> {
-  // Documents table not yet implemented — return empty
-  return { ok: true, value: [] };
+  return getAdapter().getClientDocuments(clientId);
 }

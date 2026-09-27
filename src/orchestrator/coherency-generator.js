@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Remembrance Sun — the coherency generator of the ecosystem.
@@ -62,6 +63,16 @@ class CoherencyGenerator {
     this._intervalId = null;
     this._cycleIntervalMs = options.cycleIntervalMs || 5000;
     this._repoRoot = options.repoRoot || process.cwd();
+    // withReflexes: when true, every Sun cycle also fires the reflex
+    // engine. The Sun keeps radiating coherency upward AND inspects
+    // its own sensors after radiation. If cascade is too high, the
+    // reflexes relax it; if adversarial pressure is detected, the
+    // reflexes tighten the variance gate. The Sun stops being a pure
+    // generator and becomes a generator-plus-self-regulator. Default
+    // false to preserve backward compatibility; new callers should
+    // opt in.
+    this._withReflexes = options.withReflexes === true;
+    this.reflexHistory = [];
 
     this.atomicProperties = {
       charge: 1,
@@ -156,7 +167,7 @@ class CoherencyGenerator {
           ...e, generatorCycle: this.cycleCount,
         })));
       }
-    } catch { /* atomic module unavailable */ }
+    } catch (_e) { quiet('orchestrator:coherency-generator:require', _e); /* atomic module unavailable */ }
 
     // 7. EVOLVE COVENANT
     let covenantEvolved = { activated: [], total: 0 };
@@ -169,7 +180,30 @@ class CoherencyGenerator {
           ...a, generatorCycle: this.cycleCount,
         })));
       }
-    } catch { /* living covenant unavailable */ }
+    } catch (_e) { quiet('orchestrator:coherency-generator:require', _e); /* living covenant unavailable */ }
+
+    // 7.5 FIRE REFLEXES — opt-in actor step. The Sun has just radiated
+    //     coherency; now it inspects the post-radiation field and lets
+    //     the reflex engine decide whether anything else needs doing.
+    //     Tightens the gate if adversarial pressure spiked. Relaxes if
+    //     the field is degrading. Warns if cognition has drifted. The
+    //     Sun stops being a pure generator and starts maintaining its
+    //     own balance — but only as far as bounded reflexes allow.
+    //     Failures here are best-effort; they NEVER abort the cycle.
+    let reflexResult = null;
+    if (this._withReflexes) {
+      try {
+        const { fireReflexes } = require('./reflex-engine');
+        reflexResult = await fireReflexes();
+        if (reflexResult && reflexResult.fired && reflexResult.fired.length > 0) {
+          this.reflexHistory.push({
+            cycle: this.cycleCount,
+            ts: new Date().toISOString(),
+            fired: reflexResult.fired.map(r => ({ reflex: r.reflex, action: r.action })),
+          });
+        }
+      } catch (_) { quiet('orchestrator:coherency-generator:require', _); /* never abort the cycle for a reflex error */ }
+    }
 
     // 8. COVENANT SELF-CHECK — verify we're still safe
     if (!this._covenantSelfCheck()) {
@@ -189,6 +223,10 @@ class CoherencyGenerator {
       healingZones: field.healingTargets,
       emerged: emerged.length,
       covenantEvolved: covenantEvolved.activated.length,
+      reflexes: this._withReflexes && reflexResult ? {
+        fired: reflexResult.fired.length,
+        actions: reflexResult.fired.map(r => r.action).filter(Boolean),
+      } : null,
     };
 
     this.history.push({
@@ -196,6 +234,18 @@ class CoherencyGenerator {
       ts: new Date().toISOString(),
     });
 
+    // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:coherency-generator:runCycle' });
+        break;
+      } catch (_) { quiet('orchestrator:coherency-generator:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('orchestrator:coherency-generator:__recordCost', _); /* best-effort */ }
     return result;
   }
 
@@ -270,22 +320,14 @@ class CoherencyGenerator {
       const { CoherencyDirector } = require('./coherency-director');
       const fs = require('fs');
       const d = new CoherencyDirector();
-      const files = [];
+      // Canonical walker (ECOSYSTEM §7) — exact pre-order, so the every-10th
+      // cycle sampling below sees the same files the old recursion saw.
+      const { walkFiles } = require('../core/walk-files');
       const scanDir = path.join(this._repoRoot, 'src');
-      if (fs.existsSync(scanDir)) {
-        (function walk(dir) {
-          try {
-            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-              if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
-              const p = path.join(dir, entry.name);
-              if (entry.isDirectory()) walk(p);
-              else if (entry.name.endsWith('.js')) {
-                try { files.push({ id: p, code: fs.readFileSync(p, 'utf-8'), filePath: p, language: 'javascript' }); } catch {}
-              }
-            }
-          } catch {}
-        })(scanDir);
-      }
+      const files = !fs.existsSync(scanDir) ? []
+        : walkFiles(scanDir, { skipDirs: new Set(['node_modules']), extensions: ['.js'] })
+          .map((p) => { try { return { id: p, code: fs.readFileSync(p, 'utf-8'), filePath: p, language: 'javascript' }; } catch { return null; } })
+          .filter(Boolean);
       // Sample for speed — full scan every 10th cycle, sample otherwise
       const sample = this.cycleCount % 10 === 0 ? files : files.slice(0, 50);
       d.scan(sample);
@@ -310,7 +352,7 @@ class CoherencyGenerator {
       const { APPROVAL_THRESHOLDS } = require('./self-improvement');
       if (globalCoherency >= APPROVAL_THRESHOLDS.AUTONOMOUS) return 1.0;
       if (globalCoherency >= APPROVAL_THRESHOLDS.SEMI_AUTONOMOUS) return 0.5;
-    } catch {}
+    } catch (_e) { quiet('orchestrator:coherency-generator:require', _e);}
     return Math.min(this.power, 0.1);
   }
 
@@ -326,7 +368,7 @@ class CoherencyGenerator {
       for (const zone of high) {
         surplus += zone.coherency - 0.68;
       }
-    } catch {}
+    } catch (_e) { quiet('orchestrator:coherency-generator:require', _e);}
     return surplus;
   }
 
@@ -346,7 +388,7 @@ class CoherencyGenerator {
         ec.registerSignal('generator', Math.min(1, 0.5 + perZone));
         totalRadiated = amplified;
       }
-    } catch {}
+    } catch (_e) { quiet('orchestrator:coherency-generator:getEmergentCoherency', _e);}
     return totalRadiated;
   }
 

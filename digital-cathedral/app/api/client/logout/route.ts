@@ -1,19 +1,13 @@
-import { NextResponse } from "next/server";
+import { PORTAL_SESSION_COOKIE } from "@/app/lib/portal-session";
 import { CLIENT_SESSION_COOKIE } from "@/app/lib/client-auth";
+import { clearSessionsResponse } from "@/app/lib/session-cookie";
 
-/**
- * Client Logout API
- *
- * POST /api/client/logout — Clear session cookie
- */
+// Logout clears BOTH session cookies — register and login mint both, so
+// clearing only __client_session here would leave __portal_session alive and
+// the buyer half signed-out. Clearing a cookie the browser lacks is a no-op.
 export async function POST() {
-  const response = NextResponse.json({ success: true });
-  response.cookies.set(CLIENT_SESSION_COOKIE, "", {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    maxAge: 0,
-    path: "/",
-  });
-  return response;
+  return clearSessionsResponse([
+    { name: PORTAL_SESSION_COOKIE, sameSite: "strict" },
+    { name: CLIENT_SESSION_COOKIE, sameSite: "lax" },
+  ]);
 }

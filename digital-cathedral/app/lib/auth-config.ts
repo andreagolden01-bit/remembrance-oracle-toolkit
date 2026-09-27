@@ -10,7 +10,7 @@
 
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
-import { getRoleForEmail } from "./admin-emails";
+import { getRoleForEmail } from "./admin-auth";
 
 declare module "next-auth" {
   interface Session {
@@ -30,25 +30,39 @@ declare module "next-auth/jwt" {
   }
 }
 
+// H3 fix: only register Google provider when both env vars are present.
+// NextAuth v5 evaluates the providers array at module-load. Previously
+// the `!` non-null assertions passed `undefined` to the provider in
+// missing-env environments, which crashed at /api/auth/session — and
+// AuthProvider in app/layout.tsx calls that endpoint on every page load,
+// so the entire app surface 500'd on first render when Google wasn't
+// configured. Now an unconfigured Google deploy degrades to "API-key
+// admin login only" instead of crashing the whole site.
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const googleProvider = googleClientId && googleClientSecret
+  ? [Google({ clientId: googleClientId, clientSecret: googleClientSecret })]
+  : [];
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  providers: [
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-  ],
+  providers: googleProvider,
   pages: {
     signIn: "/admin/login",
     error: "/admin/login",
   },
   session: {
     strategy: "jwt",
-    maxAge: 8 * 60 * 60, // 8 hours — matches existing session duration
+    // 30 days — the operator stays signed in while navigating. Dashboard data
+    // access is independently gated by the __admin_session cookie (a session
+    // cookie that clears on browser close), so this longer JWT window keeps a
+    // Google admin from being dropped mid-session without weakening the
+    // "until browser closes" behavior of the admin surface itself.
+    maxAge: 30 * 24 * 60 * 60,
   },
   callbacks: {
-    /** Inject role into the JWT on first sign-in and on every refresh. */
-    async jwt({ token, account }) {
-      // On initial sign-in (account is present), or on every token refresh
+    /** Inject role into the JWT on first sign-in and on every refresh.
+     *  Param types are inferred from the JWT module augmentation above. */
+    async jwt({ token }) {
       if (token.email) {
         token.role = getRoleForEmail(token.email);
       }

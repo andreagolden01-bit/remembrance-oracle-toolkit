@@ -8,7 +8,7 @@ const os = require('os');
 const { MeditationEngine, MEDITATION_DEFAULTS, STATE } =
   require('../src/core/meditation');
 
-function makeStubOracle() {
+const makeStubOracle = () => {
   // Minimal stub matching the Oracle surface meditation expects:
   // stats(), search(), submit(). Returns predictable patterns so the
   // benchmark + activities can run deterministically.
@@ -23,7 +23,7 @@ function makeStubOracle() {
     search: () => patterns,
     submit: () => ({ success: true }),
   };
-}
+};
 
 test('MeditationEngine constructs with defaults', () => {
   const eng = new MeditationEngine(makeStubOracle());

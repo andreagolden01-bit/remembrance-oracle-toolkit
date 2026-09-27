@@ -120,13 +120,34 @@ async function voidScanFile(filePath, options = {}) {
   const sorted = windows.slice().sort((a, b) => a.coherence - b.coherence);
   const candidates = sorted.slice(0, topN);
 
+  // Opt-in hidden-identifier pass (wired 2026-08-08, wire-later ledger):
+  // void-indirection's detector compresses identifier-substituted variants
+  // through a subprocess — heavy (up to 30s), so it runs only when the
+  // caller asks via options.hiddenIdentifiers.
+  let hiddenIdentifiers = null;
+  if (options.hiddenIdentifiers) {
+    try {
+      const { detectHiddenIdentifiers } = require('./void-indirection');
+      hiddenIdentifiers = detectHiddenIdentifiers(source, options);
+    } catch (e) {
+      hiddenIdentifiers = { error: e.message };
+    }
+  }
+
   return {
     file: filePath,
     totalLines: lines.length,
     windowsScored: windows.length,
     windows,
     candidates,
+    ...(hiddenIdentifiers ? { hiddenIdentifiers } : {}),
   };
 }
 
 module.exports = { voidScanFile, postCoherence };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+postCoherence.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 9, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+voidScanFile.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 1, group: 13, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };

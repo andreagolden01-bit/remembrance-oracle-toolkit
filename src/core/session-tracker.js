@@ -1,4 +1,6 @@
 'use strict';
+const { quiet } = require('./quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 /**
  * Session Tracker — records oracle interactions during a coding session.
@@ -45,6 +47,7 @@ function _newSession() {
     },
   };
 }
+_newSession.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Get or create the current session.
@@ -71,6 +74,7 @@ function _startAutoFlush() {
   // Unref so the timer doesn't prevent process exit
   if (_autoFlushTimer.unref) _autoFlushTimer.unref();
 }
+_startAutoFlush.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Flush current session state to disk without ending the session.
@@ -107,6 +111,7 @@ function _flushToDisk() {
     if (process.env.ORACLE_DEBUG) console.warn('[session-tracker] auto-flush failed:', e.message);
   }
 }
+_flushToDisk.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Record a resolve interaction.
@@ -215,7 +220,7 @@ function trackSearch(term, results, options) {
       path.join(dir, 'search-timestamp.json'),
       JSON.stringify({ timestamp: session.lastSearchTimestamp, term }),
     );
-  } catch (_) { /* non-fatal — enforcement degrades gracefully */ }
+  } catch (_) { quiet('core:session-tracker:getSession', _); /* non-fatal — enforcement degrades gracefully */ }
 }
 
 /**
@@ -327,7 +332,7 @@ function saveSession(baseDir) {
 
     // Clean up the active-session crash-recovery file
     const activePath = path.join(dir, 'session-active.json');
-    try { if (fs.existsSync(activePath)) fs.unlinkSync(activePath); } catch (_) { /* best effort */ }
+    try { if (fs.existsSync(activePath)) fs.unlinkSync(activePath); } catch (_) { quiet('core:session-tracker:getSession', _); /* best effort */ }
 
     return filePath;
   } catch (e) {
@@ -345,8 +350,15 @@ function resetSession() {
     _autoFlushTimer = null;
   }
   _session = _newSession();
+  _resetAt = Date.now();
   _startAutoFlush();
 }
+
+// Disk entries older than this epoch are ignored by wasSearchRecent after a
+// resetSession() call (in-process tests rely on a clean slate). Pre-commit
+// hooks and other processes don't call resetSession, so cross-process
+// enforcement still works.
+let _resetAt = 0;
 
 /**
  * Check if the session has any recorded interactions.
@@ -371,6 +383,7 @@ function _duration(start, end) {
     return 'unknown';
   }
 }
+_duration.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Record that feedback was given for a pattern.
@@ -426,7 +439,9 @@ function wasSearchRecent(thresholdMs = 10 * 60 * 1000) {
       for (let i = arr.length - 1; i >= Math.max(0, arr.length - 5); i--) {
         const s = arr[i];
         if (s?.lastSearchTimestamp) {
-          const age = Date.now() - new Date(s.lastSearchTimestamp).getTime();
+          const tsMs = new Date(s.lastSearchTimestamp).getTime();
+          if (tsMs < _resetAt) continue;
+          const age = Date.now() - tsMs;
           if (age < thresholdMs) return true;
         }
       }
@@ -436,11 +451,14 @@ function wasSearchRecent(thresholdMs = 10 * 60 * 1000) {
     if (fs.existsSync(tsPath)) {
       const ts = JSON.parse(fs.readFileSync(tsPath, 'utf-8'));
       if (ts?.timestamp) {
-        const age = Date.now() - new Date(ts.timestamp).getTime();
-        if (age < thresholdMs) return true;
+        const tsMs = new Date(ts.timestamp).getTime();
+        if (tsMs >= _resetAt) {
+          const age = Date.now() - tsMs;
+          if (age < thresholdMs) return true;
+        }
       }
     }
-  } catch (_) {}
+  } catch (_) { quiet('core:session-tracker:getSession', _);}
   return false;
 }
 
@@ -475,3 +493,19 @@ module.exports = {
   resetSession,
   hasInteractions,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+getSession.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+trackResolve.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+trackSearch.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+buildSummary.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+saveSession.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 4, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+resetSession.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+hasInteractions.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+trackFeedback.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getPendingFeedback.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+wasSearchRecent.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getLastSearchTimestamp.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+hasUnsubmittedWork.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

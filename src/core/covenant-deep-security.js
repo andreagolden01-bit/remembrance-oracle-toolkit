@@ -5,7 +5,7 @@
  * @oracle-pattern-definitions
  */
 
-function _k(...parts) { return parts.join(''); }
+const { _k } = require('./k');
 
 function buildCredentialPattern(assignOp) {
   // Only exempt values that are CLEARLY test fixtures (not generic words like 'test'
@@ -19,10 +19,12 @@ function buildCredentialPattern(assignOp) {
     '\\s*[\'"](?!(?:' + exemptions.join('|') + ')[\'"])[^\'"]{8,}', 'i'
   );
 }
+buildCredentialPattern.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _buildDocWritePattern() {
   return new RegExp(_k('document\\.wr', 'ite\\s*\\('));
 }
+_buildDocWritePattern.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _buildJsDeepPatterns() {
   return [
@@ -31,8 +33,8 @@ function _buildJsDeepPatterns() {
     { pattern: new RegExp(_k('JSON\\.parse\\s*\\(\\s*(?![\'\"', String.fromCharCode(96), '])')), reason: _k('Unvalidated JSON.parse (potential ', 'prototype pollution)'), severity: 'medium' },
     { pattern: new RegExp(_k('Object\\.assign\\s*\\(\\s*\\{\\}\\s*,\\s*(?:req\\.body|req\\.query|in', 'put|params|data)'), 'i'), reason: _k('Proto', 'type pollution via Object.assign with user input'), severity: 'high' },
     { pattern: /\.__proto__\s*[=\[]/, reason: _k('Direct __proto__ manipulation (proto', 'type pollution)'), severity: 'high' },
-    { pattern: new RegExp('crypto\\.createHash\\s*\\(\\s*[\'"]' + 'md' + '5[\'"]\\s*\\)'), reason: _k('MD5 is crypto', 'graphically broken'), severity: 'medium' },
-    { pattern: new RegExp('crypto\\.createHash\\s*\\(\\s*[\'"]' + 'sha' + '1[\'"]\\s*\\)'), reason: _k('SHA1 is deprecated for ', 'security use'), severity: 'low' },
+    { pattern: new RegExp(_k('\\bcreate', 'Hash\\s*\\(\\s*[\'"]') + 'md' + '5[\'"]'), reason: _k('MD5 is crypto', 'graphically broken'), severity: 'medium' },
+    { pattern: new RegExp(_k('\\bcreate', 'Hash\\s*\\(\\s*[\'"]') + 'sha' + '1[\'"]'), reason: _k('SHA1 is deprecated for ', 'security use'), severity: 'low' },
     { pattern: /Math\.random\s*\(/, reason: _k('Math.random is not crypto', 'graphically secure'), severity: 'low' },
     { pattern: new RegExp(_k('new\\s+Fun', 'ction\\s*\\(.*\\+')), reason: _k('Dynamic Fun', 'ction constructor with concatenation'), severity: 'high' },
     { pattern: new RegExp(_k('setTimeout\\s*\\(\\s*[\'\"', String.fromCharCode(96), ']')), reason: _k('setTimeout with string argument acts like ev', 'al'), severity: 'medium' },
@@ -43,6 +45,7 @@ function _buildJsDeepPatterns() {
     { pattern: new RegExp('NODE_TLS_REJECT_' + 'UNAUTHORIZED\\s*=\\s*[\'"]0[\'"]'), reason: _k('TLS validation disabled ', 'globally'), severity: 'high' },
   ];
 }
+_buildJsDeepPatterns.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 3, harmPotential: "minimal", alignment: "degrading", intention: "benevolent", domain: "utility" };
 
 function _buildPyDeepPatterns() {
   return [
@@ -58,6 +61,7 @@ function _buildPyDeepPatterns() {
     { pattern: buildCredentialPattern('='), reason: _k('Hardcoded sec', 'ret/cred', 'ential detected'), severity: 'high' },
   ];
 }
+_buildPyDeepPatterns.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _buildGoDeepPatterns() {
   return [
@@ -68,6 +72,7 @@ function _buildGoDeepPatterns() {
     { pattern: /fmt\.Sprintf\s*\(\s*\w+/, reason: _k('Format string from variable (potential ', 'format string attack)'), severity: 'medium' },
   ];
 }
+_buildGoDeepPatterns.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 2, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };
 
 const DEEP_SECURITY_PATTERNS = {
   javascript: _buildJsDeepPatterns(),

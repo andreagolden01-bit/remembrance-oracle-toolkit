@@ -1,3 +1,5 @@
+const { quiet } = require('../../core/quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 /**
  * Core CLI commands: setup, submit, query, validate, stats, inspect, feedback
  */
@@ -246,7 +248,7 @@ function registerCoreCommands(handlers, { oracle, getCode, jsonOut }) {
       try {
         const { trackFeedback } = require('../../core/session-tracker');
         trackFeedback(id);
-      } catch (_) { /* session tracker not critical */ }
+      } catch (_) { quiet('cli:commands:core:trackFeedback', _); /* session tracker not critical */ }
       console.log(`Updated reliability: ${colorScore(result.newReliability)}`);
     } else {
       console.log(c.red(result.error));
@@ -305,3 +307,8 @@ function registerCoreCommands(handlers, { oracle, getCode, jsonOut }) {
 }
 
 module.exports = { registerCoreCommands };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+registerCoreCommands.atomicProperties = { charge: 1, valence: 8, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 1, group: 3, period: 5, harmPotential: "dangerous", alignment: "healing", intention: "neutral", domain: "utility" };

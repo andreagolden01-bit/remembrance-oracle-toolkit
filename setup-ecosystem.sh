@@ -97,10 +97,12 @@ else
   step "Installing Python dependencies..."
   if command -v pip3 >/dev/null 2>&1 || command -v pip >/dev/null 2>&1; then
     PIP=$(command -v pip3 || command -v pip)
-    if [ -f "Void-Data-Compressor/requirements.txt" ]; then
-      "$PIP" install --quiet -r "Void-Data-Compressor/requirements.txt" 2>/dev/null \
-        && ok "  Void-Data-Compressor: pip deps installed" \
-        || warn "  Void-Data-Compressor: pip install had warnings"
+    # Void python runtime: delegate to the ONE provisioner (also run at
+    # SessionStart) so the install lives in a single place and cannot drift.
+    if [ -f "remembrance-oracle-toolkit/scripts/ensure-void-runtime.sh" ]; then
+      sh "remembrance-oracle-toolkit/scripts/ensure-void-runtime.sh" \
+        && ok "  Void-Data-Compressor: runtime provisioned" \
+        || warn "  Void-Data-Compressor: runtime provisioning had warnings"
     fi
     # ruff enables Python audit in cathedral-diagnostic
     "$PIP" install --quiet ruff 2>/dev/null \
@@ -123,7 +125,23 @@ if [ ! -f "remembrance-oracle-toolkit/digital-cathedral/.env" ] \
   ok "  created digital-cathedral/.env (edit to add API keys)"
 fi
 
-# ─── Step 5: Stamp covenant baselines ─────────────────────────────────
+# ─── Step 5: Claude Code session hooks ───────────────────────────────
+step "Wiring Claude Code session hooks..."
+if [ -d "remembrance-oracle-toolkit" ] && command -v jq >/dev/null 2>&1; then
+  (cd "remembrance-oracle-toolkit" && {
+    mkdir -p .claude
+    HOOK_SETTINGS=".claude/settings.local.json"
+    [ -s "$HOOK_SETTINGS" ] || echo '{}' > "$HOOK_SETTINGS"
+    HOOK_MSG="At session start, before other work: use the GitHub MCP tools (mcp__github__*) to check the remembrance-oracle-toolkit repo — list open pull requests and report their CI status — then surface anything that needs attention before continuing."
+    jq --arg msg "$HOOK_MSG" '.hooks.SessionStart = [{"hooks":[{"type":"command","command":("echo " + ({hookSpecificOutput:{hookEventName:"SessionStart",additionalContext:$msg}}|tojson|@sh))}]}]' "$HOOK_SETTINGS" > "$HOOK_SETTINGS.tmp" \
+      && mv "$HOOK_SETTINGS.tmp" "$HOOK_SETTINGS"
+  }) && ok "  SessionStart GitHub-check hook installed" \
+    || warn "  SessionStart hook install skipped"
+else
+  warn "  jq not found — skipping SessionStart hook install"
+fi
+
+# ─── Step 6: Stamp covenant baselines ─────────────────────────────────
 if [ "${SKIP_BASELINE:-0}" = "1" ]; then
   warn "SKIP_BASELINE=1 — skipping initial diagnostic"
 else
@@ -139,7 +157,21 @@ else
   fi
 fi
 
-# ─── Step 6: Install the unified `remembrance` CLI ─────────────────────
+# ─── Step 6.5: The instrument itself ──────────────────────────────────
+# The setup used to stop at deps and baselines: it never installed the
+# fast-path wheel and never started the compressor — a fresh host came up
+# with the goggles but without the instrument behind them (measured
+# 2026-09-17). The boot script owns those two steps; the installer reuses
+# it (SKIP_CLONE: the repos are already here; BOOT_VOID_ONLY: no port).
+if [ "${SKIP_INSTALL:-0}" != "1" ] && [ -f "remembrance-oracle-toolkit/scripts/ecosystem-boot.sh" ]; then
+  step "Bringing the Void instrument up (wheel + compressor service)..."
+  ECOSYSTEM_HOME="$(pwd)" SKIP_CLONE=1 BOOT_VOID_ONLY=1 \
+    sh remembrance-oracle-toolkit/scripts/ecosystem-boot.sh \
+    && ok "  instrument up (compressor service healthy)" \
+    || warn "  instrument did not come up — cd Void-Data-Compressor && python3 scripts/service-ctl.py start --wait"
+fi
+
+# ─── Step 7: Install the unified `remembrance` CLI ─────────────────────
 step "Installing unified CLI..."
 BIN_PATH="remembrance-oracle-toolkit/bin/remembrance"
 if [ -f "$BIN_PATH" ]; then
@@ -148,7 +180,7 @@ if [ -f "$BIN_PATH" ]; then
   echo "  Add to PATH:  export PATH=\"\$PATH:$(pwd)/remembrance-oracle-toolkit/bin\""
 fi
 
-# ─── Step 7: Verification ──────────────────────────────────────────────
+# ─── Step 8: Verification ──────────────────────────────────────────────
 step "Verifying ecosystem..."
 MISSING=0
 for repo in "${ALL_REPOS[@]}"; do

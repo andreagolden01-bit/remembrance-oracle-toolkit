@@ -1,3 +1,4 @@
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 /**
  * Transpiler & AI CLI commands: transpile, verify-transpile, context, llm
  */
@@ -237,3 +238,8 @@ function registerTranspileCommands(handlers, { oracle, jsonOut }) {
 }
 
 module.exports = { registerTranspileCommands };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+registerTranspileCommands.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 1, group: 3, period: 5, harmPotential: "dangerous", alignment: "healing", intention: "benevolent", domain: "utility" };

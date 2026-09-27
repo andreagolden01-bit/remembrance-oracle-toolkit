@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Charge Balancer — balances the charge flow across the pipeline.
@@ -161,7 +162,7 @@ function analyzeCodebaseCharge() {
         });
       }
     }
-  } catch { /* introspection unavailable */ }
+  } catch (_e) { quiet('orchestrator:charge-balancer:introspect', _e); /* introspection unavailable */ }
 
   const netCharge = functions.reduce((s, f) => s + f.charge, 0);
   const balance = Math.abs(netCharge) <= 2 ? 'balanced' : netCharge > 0 ? 'expanding' : 'contracting';
@@ -177,27 +178,7 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-signalToCharge.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 2,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'orchestration',
-};
-analyzeChargeFlow.atomicProperties = {
-  charge: 0, valence: 0, mass: 'medium', spin: 'even', phase: 'liquid',
-  reactivity: 'inert', electronegativity: 0, group: 3, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'orchestration',
-};
-analyzeFieldCharge.atomicProperties = {
-  charge: 0, valence: 0, mass: 'heavy', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 13, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'orchestration',
-};
-analyzeCodebaseCharge.atomicProperties = {
-  charge: 0, valence: 2, mass: 'heavy', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 1, group: 2, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'orchestration',
-};
+signalToCharge.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+analyzeChargeFlow.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+analyzeFieldCharge.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+analyzeCodebaseCharge.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

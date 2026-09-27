@@ -1,3 +1,4 @@
+const { quiet } = require('./quiet');
 /**
  * The Covenant Filter — The Kingdom's Weave
  *
@@ -61,6 +62,7 @@ function _cacheKey(code) {
   const crypto = require('crypto');
   return crypto.createHash('sha256').update(code).digest('hex');
 }
+_cacheKey.atomicProperties = { charge: 0, valence: 1, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 16, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function covenantCheck(code, metadata = {}) {
   // Fast-path: if no metadata and not trusted, check cache
@@ -195,7 +197,7 @@ function covenantCheck(code, metadata = {}) {
       });
       violatedPrinciples.add(`evolved:${ev.id}`);
     }
-  } catch { /* living covenant not available — founding principles still run */ }
+  } catch (_e) { quiet('core:covenant:require', _e); /* living covenant not available — founding principles still run */ }
 
   const totalPrinciples = COVENANT_PRINCIPLES.length + customPrincipleCount + evolvedPrincipleCount;
   const principlesPassed = totalPrinciples - violatedPrinciples.size;
@@ -206,6 +208,41 @@ function covenantCheck(code, metadata = {}) {
     principlesPassed,
     totalPrinciples,
   };
+
+  // Contribute this seal to the LivingRemembranceEngine field.
+  //
+  // WHAT REACHES THE FIELD COMES FROM THE INSTRUMENT.
+  //
+  // This contributed `principlesPassed / totalPrinciples` as `coherence`. That
+  // is a PASS RATIO, not a coherency — the Void compressor is the only thing
+  // that produces one. It was the field's largest single source at 147,574
+  // contributions, and because nearly every check seals cleanly the ratio sat
+  // at ~0.999 essentially always: a number that could not distinguish one
+  // artifact from another, pinning the field's coherence to its ceiling.
+  //
+  // The seal itself is unchanged and is still what gates commits. What changed
+  // is the input handed to the field: the compressor's reading of this same
+  // code. The pass ratio becomes the AUTHORITY WEIGHT, which is what it is
+  // genuinely good for — a fully sealed artifact speaks with full authority, a
+  // violating one speaks with less, and neither gets to invent a coherency.
+  //
+  // cachedOnly: covenantCheck runs on every commit hook and every scoring
+  // pass. A blocking ~2s compressor read here would be as bad as the one that
+  // took a 20-pattern compression pass to 39.7s. It contributes when the
+  // instrument has already read this exact content, and stays silent otherwise.
+  try {
+    const { contribute } = require('./field-coupling');
+    const { coherencyOf } = require('./void-service');
+    const measured = coherencyOf(code, { cachedOnly: true });
+    if (typeof measured === 'number' && isFinite(measured)) {
+      contribute({
+        cost: 1,
+        coherence: measured,
+        resonance: totalPrinciples > 0 ? principlesPassed / totalPrinciples : 0,
+        source: 'void:compress_signal:covenant',
+      });
+    }
+  } catch (_) { quiet('core:covenant:contribute', _); /* field unavailable — best-effort */ }
 
   // Cache the result (only for code-only checks)
   if (!hasMeta) {
@@ -322,6 +359,28 @@ function deepSecurityScan(code, options = {}) {
     whisper = 'The code stands clean. All security principles upheld.';
   }
 
+  const totalFindings = covenant.violations.length + deepFindings.length + externalTools.length;
+
+  // Contribute this security scan to the LivingRemembranceEngine field.
+  // cost = totalFindings + 1 (at least 1 unit of work even for clean scans),
+  // coherence = 0 on veto, otherwise 1 - (advisory-findings / (totalFindings + 1))
+  // so a clean pass contributes coherence=1, a fully-vetoed scan contributes 0.
+  // Note: covenantCheck() already contributed independently above; this is
+  // the security-scan-specific signal (deep findings + external tools).
+  // PROVENANCE (2026-08-09): the findings ratio was a count ratio and the
+  // veto→0 mapping invented a number — neither came from the compressor.
+  // The scan is WORK sized by findings, verdict in the source bucket; the
+  // scanned code's lawful coherency enters at covenantCheck's own
+  // void:compress_signal doorway above.
+  try {
+    const { recordCost } = require('./field-coupling');
+    recordCost({
+      units: Math.max(1, totalFindings + 1),
+      kind: 'audit',
+      source: 'security-scan:' + (veto ? 'veto' : 'pass'),
+    });
+  } catch (_) { quiet('core:covenant:recordCost', _); /* field unavailable — best-effort */ }
+
   return {
     passed: !veto,
     covenant: { sealed: covenant.sealed, violations: covenant.violations.length, principlesPassed: covenant.principlesPassed },
@@ -329,7 +388,7 @@ function deepSecurityScan(code, options = {}) {
     externalTools,
     veto,
     whisper,
-    totalFindings: covenant.violations.length + deepFindings.length + externalTools.length,
+    totalFindings,
   };
 }
 
@@ -365,43 +424,10 @@ function safeJsonParse(str, fallback = {}) {
   }
 }
 
-/**
- * Read the dismissal-calibration log for a covenant principle.
- *
- * Every time a user dismisses a finding tagged `bugClass: 'covenant'`,
- * the reactions module records a row in
- * `namespace('covenant_calibration').append(principleId, {...})`.
- * This reader returns the raw dismissal list so tuning tools (and,
- * eventually, a self-adjusting principle weight) can consult it.
- */
-function getCovenantCalibration(principleId, repoRoot = process.cwd()) {
-  try {
-    const { getStorage } = require('./storage');
-    const ns = getStorage(repoRoot).namespace('covenant_calibration');
-    // append() writes to a keyed log — if the storage backend is JSON,
-    // the log lives in <namespace>/<key>.log.json-lines; if sqlite, it
-    // lives in oracle_storage_log. Both expose the data via a raw read.
-    // For a simple first-pass reader we return the entries list.
-    const fs = require('fs');
-    const path = require('path');
-    const logPath = path.join(repoRoot, '.remembrance', 'covenant_calibration', `${principleId}.log.log`);
-    if (fs.existsSync(logPath)) {
-      return fs.readFileSync(logPath, 'utf-8')
-        .split('\n')
-        .filter(Boolean)
-        .map(line => { try { return JSON.parse(line); } catch { return null; } })
-        .filter(Boolean);
-    }
-    return [];
-  } catch {
-    return [];
-  }
-}
-
 module.exports = {
   covenantCheck,
   getCovenant,
-  getCovenantCalibration,
+
   formatCovenantResult,
   deepSecurityScan,
   safeJsonParse,
@@ -413,45 +439,9 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-covenantCheck.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-getCovenant.atomicProperties = {
-  charge: 0, valence: 0, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-getCovenantCalibration.atomicProperties = {
-  charge: 0, valence: 3, mass: 'heavy', spin: 'odd', phase: 'gas',
-  reactivity: 'medium', electronegativity: 1, group: 2, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-formatCovenantResult.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 3, period: 2,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-deepSecurityScan.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-safeJsonParse.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-setPrincipleRegistry.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'solid',
-  reactivity: 'inert', electronegativity: 0, group: 10, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
+covenantCheck.atomicProperties = { charge: 1, valence: 3, mass: "heavy", spin: "odd", phase: "solid", reactivity: "inert", electronegativity: 1, group: 3, period: 5, harmPotential: "dangerous", alignment: "healing", intention: "malevolent", domain: "utility" };
+getCovenant.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+formatCovenantResult.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+deepSecurityScan.atomicProperties = { charge: 0, valence: 5, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 1, group: 13, period: 4, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
+safeJsonParse.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+setPrincipleRegistry.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 10, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

@@ -90,7 +90,7 @@ class AIConnector {
       limit: params.limit || 5,
       minCoherency: params.minCoherency ?? params.min_coherency ?? 0.5,
     });
-    return {
+    const __retVal = {
       action: 'query',
       count: results.length,
       results: results.map(r => ({
@@ -104,6 +104,10 @@ class AIConnector {
         reliability: r.reliability,
       })),
     };
+    // field contribution removed: contributed reliability, not a coherency.
+    // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+    // list treated any numeric-looking return field as a coherence signal.
+    return __retVal;
   }
 
   _feedback(params) {

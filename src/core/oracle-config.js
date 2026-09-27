@@ -1,3 +1,4 @@
+const { quiet } = require('./quiet');
 /**
  * Oracle Configuration — persistent toggle and prompt tag management.
  *
@@ -45,6 +46,7 @@ function configPath(scope = 'local') {
   }
   return path.join(process.cwd(), '.remembrance', CONFIG_FILENAME);
 }
+configPath.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Load config, merging global defaults ← local overrides.
@@ -58,7 +60,7 @@ function loadConfig() {
     try {
       const raw = JSON.parse(fs.readFileSync(globalPath, 'utf-8'));
       Object.assign(config, raw);
-    } catch (_) { /* corrupt config — use defaults */ }
+    } catch (_) { quiet('core:oracle-config:configPath', _); /* corrupt config — use defaults */ }
   }
 
   // Local overrides global
@@ -67,11 +69,12 @@ function loadConfig() {
     try {
       const raw = JSON.parse(fs.readFileSync(localPath, 'utf-8'));
       Object.assign(config, raw);
-    } catch (_) { /* corrupt config — use defaults */ }
+    } catch (_) { quiet('core:oracle-config:configPath', _); /* corrupt config — use defaults */ }
   }
 
   return config;
 }
+loadConfig.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 3, harmPotential: "none", alignment: "degrading", intention: "neutral", domain: "utility" };
 
 /**
  * Save config to the specified scope.
@@ -85,6 +88,7 @@ function saveConfig(config, scope = 'local') {
   fs.writeFileSync(filePath, JSON.stringify(config, null, 2) + '\n');
   return filePath;
 }
+saveConfig.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Check if the oracle is enabled.
@@ -92,6 +96,7 @@ function saveConfig(config, scope = 'local') {
 function isOracleEnabled() {
   return loadConfig().enabled;
 }
+isOracleEnabled.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Toggle oracle on or off. Returns the new state.
@@ -102,6 +107,7 @@ function toggleOracle(state) {
   saveConfig(config);
   return config.enabled;
 }
+toggleOracle.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Get the prompt tag (returns empty string if disabled).
@@ -111,6 +117,7 @@ function getPromptTag() {
   if (!config.promptTagEnabled || !config.enabled) return '';
   return config.promptTag || '';
 }
+getPromptTag.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Set a custom prompt tag.
@@ -122,6 +129,7 @@ function setPromptTag(tag) {
   saveConfig(config);
   return config.promptTag;
 }
+setPromptTag.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Enable or disable the prompt tag separately from the oracle toggle.
@@ -132,6 +140,7 @@ function togglePromptTag(state) {
   saveConfig(config);
   return config.promptTagEnabled;
 }
+togglePromptTag.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Generate a provenance watermark for a pattern pull.
@@ -164,6 +173,7 @@ function generateProvenance(patternId, sourceTier = 'local', options = {}) {
 
   return provenance;
 }
+generateProvenance.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 3, harmPotential: "none", alignment: "neutral", intention: "malevolent", domain: "utility" };
 
 /**
  * Record a blockchain transaction signature against a pattern's metadata.
@@ -194,6 +204,7 @@ function setBlockchainTx(patternId, txSignature, store) {
 
   return { success: false, reason: 'No store provided — cannot persist blockchain tx' };
 }
+setBlockchainTx.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Append the prompt tag to a resolve/search result object (if enabled).
@@ -217,6 +228,7 @@ function applyPromptTag(result) {
   }
   return result;
 }
+applyPromptTag.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Toggle provenance tracking on or off. Returns the new state.
@@ -227,6 +239,7 @@ function toggleProvenance(state) {
   saveConfig(config);
   return config.provenanceTracking;
 }
+toggleProvenance.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Get search enforcement level: 'block', 'warn', or 'off'.
@@ -236,6 +249,7 @@ function getSearchEnforcement() {
   if (!config.enabled) return 'off';
   return config.searchEnforcement || 'block';
 }
+getSearchEnforcement.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Get feedback enforcement level: 'block', 'warn', or 'off'.
@@ -245,6 +259,7 @@ function getFeedbackEnforcement() {
   if (!config.enabled) return 'off';
   return config.feedbackEnforcement || 'warn';
 }
+getFeedbackEnforcement.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Get search grace period in ms.
@@ -252,6 +267,7 @@ function getFeedbackEnforcement() {
 function getSearchGracePeriod() {
   return loadConfig().searchGracePeriod || 600000;
 }
+getSearchGracePeriod.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Get auto-publish setting (defaults to false).
@@ -259,6 +275,7 @@ function getSearchGracePeriod() {
 function getAutoPublish() {
   return loadConfig().autoPublish || false;
 }
+getAutoPublish.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   loadConfig,

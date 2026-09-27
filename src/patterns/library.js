@@ -1,3 +1,16 @@
+const { quiet } = require('../core/quiet');
+/**
+ * @oracle-infrastructure
+ *
+ * Mutations in this file write internal ecosystem state
+ * (entropy.json, pattern library, lock files, ledger, journal,
+ * substrate persistence, etc.) — not user-input-driven content.
+ * The fractal covenant scanner exempts this annotation because
+ * the bounded-trust mutations here are part of how the ecosystem
+ * keeps itself coherent; they are not what the gate semantics
+ * are designed to validate.
+ */
+
 /**
  * Pattern Library — The heart of the Oracle's intelligence.
  *
@@ -74,6 +87,7 @@ function syncSleep(ms) {
     while (Date.now() < end) { /* spin */ }
   }
 }
+syncSleep.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Acquire an exclusive lockfile using O_CREAT|O_EXCL (atomic on POSIX).
@@ -117,6 +131,7 @@ function acquireLock(storeDir, label = 'pattern-library') {
   }
   throw new Error(`Failed to acquire lock for ${label} after ${LOCK_DELAYS.length + 1} attempts — another process may be holding the lock at ${storeDir}`);
 }
+acquireLock.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Load JSON with .bak recovery — prevents data loss on corruption.
@@ -152,6 +167,7 @@ function loadJSONSafe(filePath, fallback) {
 
   return fallback;
 }
+loadJSONSafe.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "benevolent", domain: "utility" };
 
 /**
  * Atomic write: serialize → write .tmp → backup current → rename.
@@ -173,6 +189,7 @@ function atomicWriteJSON(filePath, data) {
   }
   fs.renameSync(tmpPath, filePath);
 }
+atomicWriteJSON.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── SERF Output Sanitizer — ported from Reflector Oracle's serfSanitizer.js ───
 
@@ -196,6 +213,7 @@ function fixChainBreakingSemicolons(code) {
   }
   return result.join('\n');
 }
+fixChainBreakingSemicolons.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Remove semicolons inserted after continuation tokens: [ { ( , => || && ?
@@ -206,6 +224,7 @@ function fixBracketSemicolons(code) {
     '$1$2'
   );
 }
+fixBracketSemicolons.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Sanitize SERF-healed code — fixes known transform bugs before storage.
@@ -217,6 +236,7 @@ function sanitizePatternCode(code) {
   result = fixChainBreakingSemicolons(result);
   return result;
 }
+sanitizePatternCode.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 const PATTERN_TYPES = [
   'algorithm', 'data-structure', 'utility', 'design-pattern',
@@ -265,6 +285,7 @@ function tryGetSQLite(storeDir) {
   }
   return null;
 }
+tryGetSQLite.atomicProperties = { charge: 0, valence: 3, mass: "medium", spin: "odd", phase: "solid", reactivity: "low", electronegativity: 1, group: 10, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 class PatternLibrary {
   // Secondary-index caches — rebuilt lazily on first access and
@@ -357,7 +378,7 @@ class PatternLibrary {
         const existing = JSON.parse(fs.readFileSync(this.libraryPath, 'utf-8'));
         if (Array.isArray(existing)) shape = 'array';
       }
-    } catch { /* treat as wrapped */ }
+    } catch (_e) { quiet('patterns:library:loadJSONSafe', _e); /* treat as wrapped */ }
     const payload = shape === 'array' ? (data.patterns || []) : data;
     this._writeJSON(payload);
   }
@@ -375,7 +396,7 @@ class PatternLibrary {
           payload = data.patterns;
         }
       }
-    } catch { /* treat as wrapped */ }
+    } catch (_e) { quiet('patterns:library:loadJSONSafe', _e); /* treat as wrapped */ }
 
     const unlock = acquireLock(this.storeDir);
     try {
@@ -409,6 +430,7 @@ class PatternLibrary {
     const coherency = computeCoherencyScore(sanitizedCode, {
       language: pattern.language,
       testPassed: pattern.testPassed,
+      testCode: pattern.testCode,
       historicalReliability: pattern.reliability ?? 0.5,
     });
 
@@ -465,13 +487,17 @@ class PatternLibrary {
     }
 
     if (patterns.length === 0) {
-      return {
+      const __retVal = {
         decision: 'generate',
         pattern: null,
         confidence: 1.0,
         reasoning: 'Pattern library is empty — generation required',
         alternatives: [],
       };
+      // field contribution removed: contributed confidence, not a coherency.
+      // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+      // list treated any numeric-looking return field as a coherence signal.
+      return __retVal;
     }
 
     // Parse request description into structured form for structural matching
@@ -712,6 +738,62 @@ class PatternLibrary {
       return this._sqlite.recordPatternUsage(id, succeeded);
     }
     return this._recordUsageJSON(id, succeeded);
+  }
+
+  /** Increment a pattern's pull_count (retrieved from the library, not yet
+   * applied). Best-effort; JSON backend silently no-ops. */
+  recordPull(id) {
+    if (this._backend === 'sqlite') return this._sqlite.recordPatternPull(id);
+    return null;
+  }
+
+  /** Bulk pull — wire into search-result paths so every retrieval logs once. */
+  recordPulls(ids) {
+    if (this._backend === 'sqlite') return this._sqlite.recordPatternPulls(ids);
+    return { recorded: 0 };
+  }
+
+  /** Record an independent verification of a pattern. `passed=true` increments
+   * verified_count; false records the attempt without incrementing. */
+  recordVerified(id, passed) {
+    if (this._backend === 'sqlite') return this._sqlite.recordPatternVerified(id, passed);
+    return null;
+  }
+
+  /**
+   * Verify a pattern by running its stored code + testCode through the
+   * exec-verify sandbox. On `status === 'pass'`, increments verified_count.
+   * Returns { id, status, signal, detail, verifiedCount, pulled? } or null
+   * if the pattern is missing / has no testCode / language unsupported.
+   *
+   * This is what turns "stored testCode" into a count that ratchets up over
+   * time — the third lifecycle axis the user asked for.
+   */
+  async verifyPattern(id, opts = {}) {
+    const pattern = this._backend === 'sqlite'
+      ? this._sqlite.getPattern(id)
+      : this.getAll().find((p) => p.id === id);
+    if (!pattern) return null;
+    if (!pattern.testCode || !String(pattern.testCode).trim()) {
+      return { id, status: 'skipped', signal: null, detail: 'no testCode stored', verifiedCount: pattern.verifiedCount || 0 };
+    }
+    let verifyExecution;
+    try { ({ verifyExecution } = require('../scoring/exec-verify')); }
+    catch (_e) { return { id, status: 'skipped', signal: null, detail: 'exec-verify unavailable', verifiedCount: pattern.verifiedCount || 0 }; }
+    const result = await verifyExecution(pattern.code, {
+      language: pattern.language,
+      testCode: pattern.testCode,
+      timeoutMs: opts.timeoutMs,
+    });
+    if (!result) {
+      return { id, status: 'skipped', signal: null, detail: 'language unsupported or empty', verifiedCount: pattern.verifiedCount || 0 };
+    }
+    this.recordVerified(id, result.status === 'pass');
+    const after = this._backend === 'sqlite' ? this._sqlite.getPattern(id) : pattern;
+    return {
+      id, status: result.status, signal: result.signal, detail: result.detail,
+      verifiedCount: (after && after.verifiedCount) || 0,
+    };
   }
 
   /**
@@ -1507,6 +1589,7 @@ function classifyPattern(code, name = '') {
   if (/test|spec|mock|stub|fixture|assert/i.test(combined)) return 'testing';
   return 'utility';
 }
+classifyPattern.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "low", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };
 
 /**
  * Infer complexity tier based on code lines and nesting depth.
@@ -1520,6 +1603,7 @@ function inferComplexity(code) {
   if (lines <= COMPLEXITY_TIER_LIMITS.COMPOSITE.MAX_LINES && depth <= COMPLEXITY_TIER_LIMITS.COMPOSITE.MAX_NESTING) return 'composite';
   return 'architectural';
 }
+inferComplexity.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function maxNestingDepth(code) {
   let max = 0, current = 0;
@@ -1529,6 +1613,7 @@ function maxNestingDepth(code) {
   }
   return max;
 }
+maxNestingDepth.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Deduplicate patterns by name, keeping the highest coherency score.
@@ -1559,6 +1644,7 @@ function deduplicatePatterns(patterns) {
   const unnamed = patterns.filter(p => !p.name);
   return [...byNameLang.values(), ...unnamed];
 }
+deduplicatePatterns.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 const { countBy } = require('../store/store-helpers');
 

@@ -3,7 +3,6 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSession, signOut } from "next-auth/react";
-import { ImageUpload } from "./image-upload";
 import { useIsAdmin } from "../protect/hooks/use-is-admin";
 
 /**
@@ -12,22 +11,28 @@ import { useIsAdmin } from "../protect/hooks/use-is-admin";
  * Returns { isPortal, portalBaseUrl } so links can target the portal domain.
  */
 function usePortalDomain(): { isPortal: boolean; portalBaseUrl: string } {
-  const [state, setState] = useState<{ isPortal: boolean; portalBaseUrl: string }>({
-    isPortal: true, // default true to avoid flash
+  const [state, setState] = useState<{
+    isPortal: boolean;
+    portalBaseUrl: string;
+  }>({
+    isPortal: false, // consumer site should never flash portal/admin links
     portalBaseUrl: "",
   });
   useEffect(() => {
-    const portalUrl = process.env.NEXT_PUBLIC_PORTAL_URL;
-    if (!portalUrl) {
-      setState({ isPortal: true, portalBaseUrl: "" });
-      return;
-    }
+    const portalUrl = (
+      process.env.NEXT_PUBLIC_PORTAL_URL || "https://valorlegacies.xyz"
+    ).replace(/\/$/, "");
     try {
-      const portalHost = new URL(portalUrl).hostname.toLowerCase();
-      const isPortal = window.location.hostname.toLowerCase() === portalHost;
-      setState({ isPortal, portalBaseUrl: isPortal ? "" : portalUrl.replace(/\/$/, "") });
+      const portalHost = new URL(portalUrl).hostname
+        .toLowerCase()
+        .replace(/^www\./, "");
+      const currentHost = window.location.hostname
+        .toLowerCase()
+        .replace(/^www\./, "");
+      const isPortal = currentHost === portalHost;
+      setState({ isPortal, portalBaseUrl: isPortal ? "" : portalUrl });
     } catch {
-      setState({ isPortal: true, portalBaseUrl: "" });
+      setState({ isPortal: false, portalBaseUrl: "" });
     }
   }, []);
   return state;
@@ -35,16 +40,24 @@ function usePortalDomain(): { isPortal: boolean; portalBaseUrl: string } {
 
 const NAV_LINKS = [
   { href: "/", label: "Home" },
-  { href: "/about", label: "About Us" },
-  { href: "/faq", label: "FAQ" },
-  { href: "/privacy", label: "Privacy Policy" },
-  { href: "/terms", label: "Terms of Service" },
+  { href: "/#life-chapters", label: "Life Chapters" },
+  { href: "/#guides", label: "Guides" },
+  { href: "/about", label: "About" },
+  { href: "/#protection-path", label: "Get Started" },
+];
+
+const ABOUT_LINKS = [
+  { href: "/about#our-story", label: "Our Story" },
+  { href: "/about#golden-standard", label: "The Golden Standard" },
+  { href: "/about#review-process", label: "Our Review Process" },
+  { href: "/privacy", label: "Privacy & Trust" },
 ];
 
 const PORTAL_NAV_LINKS = [
-  { href: "/portal", label: "Home" },
-  { href: "/portal/dashboard", label: "Dashboard" },
+  { href: "/portal", label: "Portal Home" },
   { href: "/portal/marketplace", label: "Leads Marketplace" },
+  { href: "/admin", label: "Admin Dashboard" },
+  { href: "/developers", label: "Developers" },
   { href: "/portal/terms", label: "Terms of Service" },
   { href: "/portal/privacy", label: "Privacy Policy" },
 ];
@@ -54,6 +67,7 @@ export function Navbar() {
   const { isPortal: isPortalDomain, portalBaseUrl } = usePortalDomain();
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -86,56 +100,81 @@ export function Navbar() {
     return () => document.removeEventListener("keydown", handleKey);
   }, [menuOpen]);
 
+  // Collapse the About submenu whenever the menu itself closes, so reopening
+  // always starts from the same collapsed state rather than resuming a shape
+  // the visitor left behind several pages ago.
+  useEffect(() => {
+    if (!menuOpen) setAboutOpen(false);
+  }, [menuOpen]);
+
+  // Admin-aware navigation. useIsAdmin() recognizes BOTH the legacy
+  // __admin_session cookie (API-key login) and a Google-OAuth admin (via
+  // /api/admin/check) — so a signed-in operator is never shown the logged-out
+  // "Admin login" button or bounced to the login form. Their "home" is the
+  // dashboard, and the menu still lets them reach the public pages.
+  const adminHref = `${portalBaseUrl}/admin`;
+  const menuLinks = isAdmin
+    ? [
+        { href: adminHref, label: "Admin Dashboard" },
+        { href: `${portalBaseUrl}/admin/leads`, label: "All Leads" },
+        {
+          href: `${portalBaseUrl}/admin/notifications`,
+          label: "Notifications",
+        },
+        { href: `${portalBaseUrl}/admin/outcomes`, label: "Outcomes" },
+        { href: `${portalBaseUrl}/admin/patterns`, label: "Pattern Library" },
+        { href: `${portalBaseUrl}/portal`, label: "Agent Portal" },
+        { href: "/", label: "Public Home" },
+        { href: "/about", label: "About Us" },
+        { href: "/faq", label: "FAQ" },
+        { href: "/privacy", label: "Privacy Policy" },
+        { href: "/terms", label: "Terms of Service" },
+      ]
+    : isPortalDomain
+      ? PORTAL_NAV_LINKS
+      : NAV_LINKS;
+
+  async function handleAdminSignOut() {
+    // Clear the admin session cookie, then NextAuth too if a Google session is
+    // present, landing back on the login form.
+    try {
+      await fetch("/api/admin/logout", { method: "POST" });
+    } catch {
+      /* best-effort — fall through to the redirect regardless */
+    }
+    if (session?.user) {
+      signOut({ callbackUrl: `${portalBaseUrl}/admin/login` });
+    } else {
+      window.location.href = `${portalBaseUrl}/admin/login`;
+    }
+  }
+
   return (
-    <nav className="cathedral-nav w-full text-[var(--text-primary)] relative z-50" aria-label="Main navigation">
+    <nav
+      className="cathedral-nav w-full text-[var(--text-primary)] relative z-50"
+      aria-label="Main navigation"
+    >
       <div className="max-w-6xl mx-auto px-fib-21 flex items-center justify-between h-fib-55">
         {/* Left: Home dropdown */}
         <div className="relative">
           <button
             ref={buttonRef}
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => setMenuOpen((v: boolean) => !v)}
             aria-expanded={menuOpen}
             aria-haspopup="true"
             className="flex items-center gap-fib-8 text-sm font-medium tracking-wide hover:text-[var(--teal)] transition-colors"
           >
             {/* Logo icon — uploadable when admin */}
-            <ImageUpload
-              slot="logo"
+            <img
+              src="/assets/valor/logo.webp"
               alt="Valor Legacies logo"
-              editable={isAdmin}
-              className="shrink-0 w-[26px] h-[26px] rounded overflow-hidden"
-              imgClassName="w-full h-full object-contain"
-              fallback={
-                <svg
-                  width="26"
-                  height="26"
-                  viewBox="0 0 48 48"
-                  fill="none"
-                  aria-hidden="true"
-                >
-                  <defs>
-                    <linearGradient id="nav-gold" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#B8860B" />
-                      <stop offset="50%" stopColor="#FFD700" />
-                      <stop offset="100%" stopColor="#DAA520" />
-                    </linearGradient>
-                  </defs>
-                  <line x1="24" y1="4" x2="24" y2="10" stroke="#FFD700" strokeWidth="0.7" opacity="0.4" />
-                  <line x1="14" y1="7" x2="17" y2="12" stroke="#FFD700" strokeWidth="0.5" opacity="0.3" />
-                  <line x1="34" y1="7" x2="31" y2="12" stroke="#FFD700" strokeWidth="0.5" opacity="0.3" />
-                  <line x1="8" y1="14" x2="13" y2="16" stroke="#FFD700" strokeWidth="0.5" opacity="0.2" />
-                  <line x1="40" y1="14" x2="35" y2="16" stroke="#FFD700" strokeWidth="0.5" opacity="0.2" />
-                  <path d="M22 18 Q16 10 6 12 Q4 13 5 15 Q8 16 11 18 Q14 20 18 22 Z" fill="url(#nav-gold)" opacity="0.7" />
-                  <path d="M20 20 Q14 14 8 15 Q10 17 14 20 Z" fill="#B8860B" opacity="0.3" />
-                  <path d="M26 18 Q32 10 42 12 Q44 13 43 15 Q40 16 37 18 Q34 20 30 22 Z" fill="url(#nav-gold)" opacity="0.7" />
-                  <path d="M28 20 Q34 14 40 15 Q38 17 34 20 Z" fill="#B8860B" opacity="0.3" />
-                  <path d="M24 38 Q18 32 16 28 Q14 24 16 21 Q18 18 21 19 Q23 20 24 23 Q25 20 27 19 Q30 18 32 21 Q34 24 32 28 Q30 32 24 38 Z" fill="none" stroke="url(#nav-gold)" strokeWidth="1.5" strokeLinejoin="round" />
-                  <line x1="24" y1="24" x2="24" y2="30" stroke="#FFD700" strokeWidth="1" opacity="0.8" />
-                  <line x1="21.5" y1="26.5" x2="26.5" y2="26.5" stroke="#FFD700" strokeWidth="1" opacity="0.8" />
-                </svg>
-              }
+              className="shrink-0 h-9 w-9 object-contain"
             />
-            <span className="text-[var(--teal)]">Valor Legacies</span>
+            <span className="text-[var(--teal)]">
+              {isPortalDomain
+                ? "Valor Legacies Agent & Admin Portal"
+                : "Valor Legacies"}
+            </span>
             {/* Chevron */}
             <svg
               width="13"
@@ -159,23 +198,107 @@ export function Navbar() {
               aria-label="Main navigation menu"
               className="absolute left-0 top-full mt-fib-3 w-56 rounded-[13px] py-fib-5 z-50 cathedral-surface"
             >
-              {(isPortalDomain ? PORTAL_NAV_LINKS : NAV_LINKS).map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  role="menuitem"
-                  onClick={() => setMenuOpen(false)}
-                  className="block px-fib-21 py-fib-8 text-sm text-[var(--text-muted)] hover:text-[var(--teal)] hover:bg-[var(--bg-surface-hover)] transition-colors"
-                >
-                  {link.label}
-                </Link>
-              ))}
+              {menuLinks.map((link) => {
+                // About carries a submenu, and it stays CLOSED until its arrow
+                // is used. Rendering the four sub-links inline made the menu
+                // read as nine flat items with no hierarchy, so the top-level
+                // choices were buried by the detail underneath one of them.
+                const hasSubmenu =
+                  !isAdmin && !isPortalDomain && link.label === "About";
+                return (
+                  <div key={link.href}>
+                    <div className="flex items-center">
+                      <Link
+                        href={link.href}
+                        role="menuitem"
+                        onClick={() => setMenuOpen(false)}
+                        className="block flex-1 px-fib-21 py-fib-8 text-sm text-[var(--text-muted)] hover:text-[var(--teal)] hover:bg-[var(--bg-surface-hover)] transition-colors"
+                      >
+                        {link.label}
+                      </Link>
+                      {hasSubmenu && (
+                        // A separate control, not a wrapper around the link:
+                        // "About" itself must stay clickable, so expanding the
+                        // submenu and navigating to the page are different acts.
+                        <button
+                          type="button"
+                          onClick={() => setAboutOpen((v: boolean) => !v)}
+                          aria-expanded={aboutOpen}
+                          aria-controls="about-submenu"
+                          aria-label={aboutOpen ? "Collapse About menu" : "Expand About menu"}
+                          className="px-fib-13 py-fib-8 text-[var(--text-muted)] hover:text-[var(--teal)] transition-colors"
+                        >
+                          <svg
+                            width="11"
+                            height="11"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            className={`transition-transform ${aboutOpen ? "rotate-180" : ""}`}
+                            aria-hidden="true"
+                          >
+                            <path d="M3 4.5l3 3 3-3" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                    {hasSubmenu && aboutOpen && (
+                      <div
+                        id="about-submenu"
+                        className="mx-fib-13 mb-fib-5 border-l border-teal-cathedral/20"
+                        aria-label="About pages"
+                      >
+                        {ABOUT_LINKS.map((aboutLink) => (
+                          <Link
+                            key={aboutLink.href}
+                            href={aboutLink.href}
+                            role="menuitem"
+                            onClick={() => setMenuOpen(false)}
+                            className="block pl-fib-21 pr-fib-8 py-fib-5 text-xs text-[var(--text-muted)] hover:text-[var(--teal)] transition-colors"
+                          >
+                            {aboutLink.label}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
 
-        {/* Right: Auth state */}
-        {session?.user ? (
+        {/* Right: Auth state — admin-aware so a signed-in operator sees their
+            dashboard + sign-out, never the "Admin login" button or a bounce
+            back to the login form. */}
+        {isAdmin ? (
+          <div className="flex items-center gap-fib-8">
+            {session?.user?.image && (
+              <img
+                src={session.user.image}
+                alt={`${session.user.name || "Admin"}'s profile picture`}
+                className="w-7 h-7 rounded-full"
+                referrerPolicy="no-referrer"
+              />
+            )}
+            <span className="text-sm text-[var(--text-primary)] hidden sm:inline">
+              {session?.user?.name?.split(" ")[0] ?? "Admin"}
+            </span>
+            <a
+              href={adminHref}
+              className="flex items-center gap-fib-5 px-fib-13 py-fib-5 text-xs font-medium rounded-fib border border-[var(--teal)]/30 text-[var(--teal)] hover:border-[var(--teal)] transition-all"
+            >
+              Dashboard
+            </a>
+            <button
+              onClick={handleAdminSignOut}
+              className="text-xs text-[var(--text-muted)] hover:text-[var(--teal)] transition-colors"
+            >
+              Sign Out
+            </button>
+          </div>
+        ) : session?.user ? (
           <div className="flex items-center gap-fib-8">
             {session.user.image && (
               <img
@@ -188,16 +311,10 @@ export function Navbar() {
             <span className="text-sm text-[var(--text-primary)] hidden sm:inline">
               {session.user.name?.split(" ")[0]}
             </span>
-            {isPortalDomain && (
-              <a
-                href={`${portalBaseUrl}/admin`}
-                className="flex items-center gap-fib-5 px-fib-13 py-fib-5 text-xs font-medium rounded-fib border border-[var(--teal)]/30 text-[var(--teal)] hover:border-[var(--teal)] transition-all"
-              >
-                Admin
-              </a>
-            )}
             <button
-              onClick={() => signOut({ callbackUrl: isPortalDomain ? "/portal" : "/" })}
+              onClick={() =>
+                signOut({ callbackUrl: isPortalDomain ? "/portal" : "/" })
+              }
               className="text-xs text-[var(--text-muted)] hover:text-[var(--teal)] transition-colors"
             >
               Sign Out
@@ -227,7 +344,7 @@ export function Navbar() {
             )}
             {isPortalDomain && (
               <Link
-                href="/portal/login"
+                href="/portal"
                 className="flex items-center gap-fib-5 px-fib-13 py-fib-5 text-xs font-medium rounded-fib bg-teal-cathedral text-white hover:bg-teal-cathedral/90 transition-all"
               >
                 <svg
@@ -242,7 +359,7 @@ export function Navbar() {
                 >
                   <path d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
                 </svg>
-                Client Login
+                Agent Login
               </Link>
             )}
           </div>

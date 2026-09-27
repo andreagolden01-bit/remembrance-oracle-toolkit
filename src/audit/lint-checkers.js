@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Style / opinion checkers for the `oracle lint` command.
@@ -290,9 +291,11 @@ function lintFile(filePath, options = {}) {
   }
   try {
     const source = fs.readFileSync(filePath, 'utf-8');
-    const { analyzeCached } = require('../core/analyze');
-    const env = analyzeCached(source, filePath);
-    return { file: filePath, ...lintCode(source, { ...options, program: env.program }) };
+    // ./program-cache, not core/analyze — analyze builds its envelope by
+    // calling lintCode, so requiring it back from here closed a cycle. The
+    // parsed program is the only field this ever used.
+    const { programCached } = require('./program-cache');
+    return { file: filePath, ...lintCode(source, { ...options, program: programCached(source, filePath) }) };
   } catch (e) {
     return { file: filePath, findings: [], summary: { total: 0, byRule: {} }, error: e.message };
   }
@@ -310,6 +313,22 @@ function lintFiles(files, options = {}) {
       for (const [k, v] of Object.entries(r.summary.byRule)) byRule[k] = (byRule[k] || 0) + v;
     }
   }
+
+  // Contribute lint outcome to the LRE field, classified by kind.
+  //   coherency side: cleanliness ratio (1 - findings/files)
+  //   entropy side:   the findings themselves are disorder — routed as cost
+  //                   so a finding-heavy scan raises globalEntropy, not just
+  //                   lowers coherence.
+  try {
+    // The cleanliness ratio was a count ratio, not a compressor reading —
+    // removed from the coherence channel (provenance purge 2026-08-09).
+    // Scan size is work, findings are disorder; both ride recordCost.
+    const filesScanned = files ? files.length : 0;
+    const { recordCost } = require('../core/field-coupling');
+    recordCost({ units: Math.max(1, filesScanned), source: 'lint:scan', kind: 'work' });
+    if (totalFindings > 0) recordCost({ units: totalFindings, source: 'lint:findings', kind: 'disorder' });
+  } catch (_) { quiet('audit:lint-checkers:recordCost', _); /* best-effort */ }
+
   return {
     files: results,
     totalFindings,
@@ -326,3 +345,18 @@ module.exports = {
   lintFile,
   lintFiles,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+lintCode.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+emptyResult.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+countBy.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkParameterValidation.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "degrading", intention: "benevolent", domain: "utility" };
+checkParseIntRadix.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkVarUsage.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+isSetupName.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkSymmetryPairs.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkTodoComments.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+lintFile.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "odd", phase: "solid", reactivity: "medium", electronegativity: 1, group: 6, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+lintFiles.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 13, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };

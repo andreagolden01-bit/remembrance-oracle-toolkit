@@ -128,7 +128,12 @@ function analyzeCommentDensity(code) {
   else quality = 0.8;
   if (docstrings > 0) quality = Math.min(1, quality + 0.05);
 
-  return { density: Math.round(density * 1000) / 1000, commentLines, codeLines, blankLines, totalLines: lines.length, quality: Math.round(quality * 1000) / 1000, docstrings };
+  const __retVal = { density: Math.round(density * 1000) / 1000, commentLines, codeLines, blankLines, totalLines: lines.length, quality: Math.round(quality * 1000) / 1000, docstrings };
+  // ── LRE field-coupling (hand-corrected — auto-wire labeled this as analyzeNestingDepth) ──
+  // field contribution removed: contributed density (via __retVal), not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
 
 function analyzeNestingDepth(code) {
@@ -159,11 +164,16 @@ function analyzeNestingDepth(code) {
   if (avgDepth > 3) score -= (avgDepth - 3) * 0.15;
   score = Math.max(0, Math.min(1, score));
 
-  return {
+  const __retVal = {
     maxDepth, avgDepth: Math.round(avgDepth * 100) / 100,
     depthDistribution: depths.reduce((d, v) => { d[v] = (d[v] || 0) + 1; return d; }, {}),
     score: Math.round(score * 1000) / 1000,
   };
+  // ── LRE field-coupling (hand-wired — was missing entirely; source key reserved for it landed on analyzeCommentDensity by mistake) ──
+  // field contribution removed: contributed score (via score), not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
 
 function computeQualityMetrics(code, language) {
@@ -228,3 +238,14 @@ module.exports = {
   countDecisionPoints,
   extractFunctionBodies,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+countDecisionPoints.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractBody.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "minimal", alignment: "degrading", intention: "neutral", domain: "utility" };
+extractFunctionBodies.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 8, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+calculateCyclomaticComplexity.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 18, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+analyzeCommentDensity.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+analyzeNestingDepth.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeQualityMetrics.atomicProperties = { charge: -1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

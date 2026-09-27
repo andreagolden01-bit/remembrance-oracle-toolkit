@@ -1,3 +1,5 @@
+const { quiet } = require('../../core/quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 /**
  * CLI commands for the Oracle-Void Bridge + Crawler Controls
  *
@@ -169,9 +171,11 @@ function registerVoidCommands(handlers, { oracle }) {
 
         if (running) {
           try {
-            const log = execSync(`grep "SAVE" "${path.join(dir, 'crawler.log')}" | tail -1`, { encoding: 'utf-8' }).trim();
+            const { execFileSync } = require('child_process');
+            const grepOut = execFileSync('grep', ['SAVE', path.join(dir, 'crawler.log')], { encoding: 'utf-8' }).trim();
+            const log = grepOut.split('\n').pop();
             if (log) console.log(`  Last save:  ${log.replace(/.*======/, '').replace(/======.*/, '').trim()}`);
-          } catch {}
+          } catch (_e) { quiet('cli:commands:void:execFileSync', _e);}
         }
       } else {
         console.log('  Substrate:  Not found');
@@ -187,7 +191,7 @@ function registerVoidCommands(handlers, { oracle }) {
         if (status.connected) {
           console.log(`  Connected:  ${status.substratePath}`);
         }
-      } catch {}
+      } catch (_e) { quiet('cli:commands:void:require', _e);}
 
       console.log();
       return;
@@ -242,7 +246,7 @@ function registerVoidCommands(handlers, { oracle }) {
 
       try {
         execSync('pkill -f realtime_crawler', { shell: true });
-      } catch {}
+      } catch (_e) { quiet('cli:commands:void:execSync', _e);}
 
       console.log('\n  Crawler stopped.');
       console.log('  All learned patterns are safe on disk.');
@@ -304,14 +308,16 @@ function registerVoidCommands(handlers, { oracle }) {
 
       if (running) {
         try {
-          const saves = execSync(`grep -c "SAVE" "${path.join(dir, 'crawler.log')}" 2>/dev/null`, { encoding: 'utf-8' }).trim();
+          const { execFileSync } = require('child_process');
+          const saves = execFileSync('grep', ['-c', 'SAVE', path.join(dir, 'crawler.log')], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
           console.log(`    Save checkpoints:   ${saves}`);
-        } catch {}
+        } catch (_e) { quiet('cli:commands:void:execFileSync', _e);}
 
         try {
-          const cascades = execSync(`grep -c "CASCADE" "${path.join(dir, 'crawler.log')}" 2>/dev/null`, { encoding: 'utf-8' }).trim();
+          const { execFileSync } = require('child_process');
+          const cascades = execFileSync('grep', ['-c', 'CASCADE', path.join(dir, 'crawler.log')], { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
           console.log(`    Cascade events:     ${cascades}`);
-        } catch {}
+        } catch (_e) { quiet('cli:commands:void:execFileSync', _e);}
       }
       console.log();
       return;
@@ -379,7 +385,7 @@ function registerVoidCommands(handlers, { oracle }) {
       if (action === 'stop') {
         try {
           execSync('pkill -f "api.py"', { shell: true });
-        } catch {}
+        } catch (_e) { quiet('cli:commands:void:execSync', _e);}
         console.log('\n  API stopped.\n');
         return;
       }
@@ -392,7 +398,7 @@ function registerVoidCommands(handlers, { oracle }) {
           console.log('  Use: oracle void api stop — to stop it\n');
           return;
         }
-      } catch {}
+      } catch (_e) { quiet('cli:commands:void:execSync', _e);}
 
       const port = positional[1] && !isNaN(positional[1]) ? positional[1] : '8080';
 
@@ -608,7 +614,7 @@ function registerVoidCommands(handlers, { oracle }) {
             index[name].push({ file: f, i });
             totalIndexed++;
           }
-        } catch {}
+        } catch (_e) { quiet('cli:commands:void:findVoidDir', _e);}
       }
       const out = {
         built: new Date().toISOString(),
@@ -675,3 +681,14 @@ function registerVoidCommands(handlers, { oracle }) {
 }
 
 module.exports = { registerVoidCommands };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+findVoidDir.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+isCrawlerRunning.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractCount.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+classifyFile.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+scanSubstrate.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getPatternCounts.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+registerVoidCommands.atomicProperties = { charge: -1, valence: 7, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 0.88, group: 3, period: 6, harmPotential: "dangerous", alignment: "healing", intention: "benevolent", domain: "utility" };

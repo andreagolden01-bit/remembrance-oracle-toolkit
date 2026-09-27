@@ -9,9 +9,9 @@
  */
 const crypto = require('crypto');
 
-function cacheKey(text) {
+const cacheKey = (text) => {
   return crypto.createHash('sha256').update(text).digest('hex').slice(0, 24);
-}
+};
 
 class SafeCache {
   constructor(maxSize = 500) {

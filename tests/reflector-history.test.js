@@ -19,13 +19,13 @@ const {
 
 // ─── Helpers ───
 
-function createTmpDir() {
+const createTmpDir = () => {
   const dir = join(tmpdir(), `history-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
-}
+};
 
-function makeMockReport(avgCoherence, filesHealed, improvement) {
+const makeMockReport = (avgCoherence, filesHealed, improvement) => {
   return {
     snapshot: {
       totalFiles: 10,
@@ -55,7 +55,7 @@ function makeMockReport(avgCoherence, filesHealed, improvement) {
       overallHealth: avgCoherence >= 0.8 ? 'healthy' : 'stable',
     },
   };
-}
+};
 
 // ─── History Storage Tests ───
 

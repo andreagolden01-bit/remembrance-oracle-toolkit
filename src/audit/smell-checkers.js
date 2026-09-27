@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Architectural smell detectors — the third category alongside bugs
@@ -221,9 +222,11 @@ function smellFile(filePath, options = {}) {
   }
   try {
     const source = fs.readFileSync(filePath, 'utf-8');
-    const { analyzeCached } = require('../core/analyze');
-    const env = analyzeCached(source, filePath);
-    return { file: filePath, ...smellCode(source, { ...options, program: env.program }) };
+    // ./program-cache, not core/analyze — analyze builds its envelope by
+    // calling smellCode, so requiring it back from here closed a cycle. The
+    // parsed program is the only field this ever used.
+    const { programCached } = require('./program-cache');
+    return { file: filePath, ...smellCode(source, { ...options, program: programCached(source, filePath) }) };
   } catch (e) {
     return { file: filePath, findings: [], summary: { total: 0, byRule: {} }, error: e.message };
   }
@@ -241,6 +244,18 @@ function smellFiles(files, options = {}) {
       for (const [k, v] of Object.entries(r.summary.byRule)) byRule[k] = (byRule[k] || 0) + v;
     }
   }
+
+  // Field: scan size is work, findings are disorder — both recordCost.
+  // The old cleanliness ratio was a count ratio, not a compressor
+  // reading, so it left the coherence channel (provenance purge
+  // 2026-08-09).
+  try {
+    const filesScanned = files ? files.length : 0;
+    const { recordCost } = require('../core/field-coupling');
+    recordCost({ units: Math.max(1, filesScanned), source: 'smell:scan', kind: 'work' });
+    if (totalFindings > 0) recordCost({ units: totalFindings, source: 'smell:findings', kind: 'disorder' });
+  } catch (_) { quiet('audit:smell-checkers:recordCost', _); /* best-effort */ }
+
   return {
     files: results,
     totalFindings,
@@ -254,3 +269,17 @@ module.exports = {
   smellFiles,
   DEFAULT_THRESHOLDS,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+smellCode.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+emptyResult.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+countBy.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkLongFunction.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkDeepNesting.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkTooManyParams.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkGodFile.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkFeatureEnvy.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+smellFile.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "solid", reactivity: "medium", electronegativity: 1, group: 6, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+smellFiles.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

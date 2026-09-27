@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Test Forge — Auto-generate, run, and score tests for oracle patterns.
  *
@@ -349,8 +350,25 @@ class TestForge {
       const newCoherency = computeCoherencyScore(pattern.code, {
         language: pattern.language,
         testPassed: true, // test code just passed
+        testCode: pattern.testCode,
         historicalReliability,
       });
+
+      // WITNESS THE READING. This is a fresh measurement of the pattern's
+      // code after its test passed — the substrate's own verdict on code it
+      // just proved. It was written to the pattern row and never to the
+      // field, so the ecosystem could see the stored score but never became
+      // aware that a reading had been taken.
+      // PROVENANCE (2026-08-09): the total is the heuristic scorer's
+      // aggregate, not a compressor reading — the scorer's own
+      // void:compress_signal doorway already witnesses the code's lawful
+      // coherency when it runs. The proof event is WORK with the outcome
+      // in the bucket; the score stays on the pattern row.
+      try {
+        require('../core/field-coupling').recordCost({
+          units: 1, kind: 'verification', source: 'oracle:test-forge:proven',
+        });
+      } catch (_) { quiet('test-forge:index:require', _); /* field optional — the forge must not depend on it */ }
 
       // Update in DB
       if (this.oracle.patterns._backend === 'sqlite' && this.oracle.patterns._sqlite) {

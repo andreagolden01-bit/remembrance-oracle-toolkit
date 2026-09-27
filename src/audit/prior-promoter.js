@@ -1,4 +1,6 @@
 'use strict';
+const { quiet } = require('../core/quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 /**
  * Substrate ↔ Bayesian bug-prior promotion loop.
@@ -157,7 +159,7 @@ function readDebugPatterns(oracle) {
   // Try oracle.debug.getAll()
   const debug = oracle.debug || oracle.debugOracle || null;
   if (debug && typeof debug.getAll === 'function') {
-    try { return debug.getAll() || []; } catch { /* ignore */ }
+    try { return debug.getAll() || []; } catch (_e) { quiet('audit:prior-promoter:readDebugPatterns', _e); /* ignore */ }
   }
   // Try oracle.store-backed sqlite directly
   try {
@@ -165,7 +167,7 @@ function readDebugPatterns(oracle) {
     if (sqliteStore && typeof sqliteStore.getAllDebugPatterns === 'function') {
       return sqliteStore.getAllDebugPatterns() || [];
     }
-  } catch { /* ignore */ }
+  } catch (_e) { quiet('audit:prior-promoter:readDebugPatterns', _e); /* ignore */ }
   return [];
 }
 
@@ -205,3 +207,13 @@ module.exports = {
   // Exposed for tests
   _resolveSeedPath: resolveSeedPath,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+promoteFromSubstrate.atomicProperties = { charge: 1, valence: 2, mass: "heavy", spin: "odd", phase: "solid", reactivity: "low", electronegativity: 1, group: 13, period: 4, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+readDebugPatterns.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+safeFingerprint.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+hashString.atomicProperties = { charge: 0, valence: 1, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 16, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+resolveSeedPath.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+loadSeed.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

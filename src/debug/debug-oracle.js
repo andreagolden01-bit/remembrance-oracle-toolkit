@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Debug Oracle — Quantum Debugging Intelligence
  *
@@ -641,6 +642,9 @@ class DebugOracle {
       this._collapsePattern(result.id, now);
     }
 
+    // field contribution removed: contributed matchScore, not a coherency.
+    // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+    // list treated any numeric-looking return field as a coherence signal.
     return results;
   }
 
@@ -690,6 +694,9 @@ class DebugOracle {
       newVariants = this._cascadeGrow(pattern);
     }
 
+    // field contribution removed: contributed amplitude, not a coherency.
+    // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+    // list treated any numeric-looking return field as a coherence signal.
     return {
       success: true,
       confidence: amplitude,
@@ -879,6 +886,9 @@ class DebugOracle {
       entangledPairs += entangled.length;
     }
 
+    // field contribution removed: contributed confidence (via totalConfidence), not a coherency.
+    // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+    // list treated any numeric-looking return field as a coherence signal.
     return {
       totalPatterns: all.length,
       avgConfidence: all.length > 0 ? Math.round(totalConfidence / all.length * 1000) / 1000 : 0,
@@ -1064,7 +1074,7 @@ class DebugOracle {
       const parentRow = this.store.db.prepare('SELECT entangled_with FROM debug_patterns WHERE id = ?').get(parentId);
       if (parentRow) {
         let existing = [];
-        try { existing = JSON.parse(parentRow.entangled_with || '[]'); } catch (_) { /* corrupt data — reset */ }
+        try { existing = JSON.parse(parentRow.entangled_with || '[]'); } catch (_) { quiet('debug:debug-oracle:walk', _); /* corrupt data — reset */ }
         const merged = [...new Set([...existing, ...childIds])];
         this.store.db.prepare('UPDATE debug_patterns SET entangled_with = ? WHERE id = ?')
           .run(JSON.stringify(merged), parentId);
@@ -1075,7 +1085,7 @@ class DebugOracle {
         const childRow = this.store.db.prepare('SELECT entangled_with FROM debug_patterns WHERE id = ?').get(childId);
         if (childRow) {
           let existing = [];
-          try { existing = JSON.parse(childRow.entangled_with || '[]'); } catch (_) { /* corrupt data — reset */ }
+          try { existing = JSON.parse(childRow.entangled_with || '[]'); } catch (_) { quiet('debug:debug-oracle:walk', _); /* corrupt data — reset */ }
           const merged = [...new Set([...existing, parentId])];
           this.store.db.prepare('UPDATE debug_patterns SET entangled_with = ? WHERE id = ?')
             .run(JSON.stringify(merged), childId);
@@ -1296,7 +1306,7 @@ class DebugOracle {
   }
 
   _rowToDebugPattern(row) {
-    return {
+    const __retVal = {
       id: row.id,
       errorSignature: row.error_signature,
       errorMessage: row.error_message,
@@ -1325,6 +1335,10 @@ class DebugOracle {
       entangledWith: safeParse(row.entangled_with, []),
       observationCount: row.observation_count || 0,
     };
+    // field contribution removed: contributed confidence, not a coherency.
+    // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+    // list treated any numeric-looking return field as a coherence signal.
+    return __retVal;
   }
 }
 
@@ -1353,3 +1367,18 @@ module.exports = {
   ENTANGLEMENT_STRENGTH,
   INTERFERENCE_RADIUS,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+safeParse.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+normalizeError.atomicProperties = { charge: -1, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractErrorClass.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+classifyError.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 5, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+fingerprint.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeAmplitude.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+applyDecoherence.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeInterference.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeFixSimilarity.atomicProperties = { charge: 0, valence: 1, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+generateErrorVariants.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+generateFixVariants.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

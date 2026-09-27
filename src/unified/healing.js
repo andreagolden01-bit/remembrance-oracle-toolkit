@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Unified Healing Orchestrator — single entry point for all code healing.
@@ -108,6 +109,25 @@ function heal(pattern, options = {}) {
 
     const originalCoherency = pattern.coherencyScore?.total ?? 0;
 
+    // WITNESS THE READING. computeCoherencyScore above measures the healed
+    // code fresh — that number exists nowhere else, and until now it was
+    // returned to the caller and dropped. A reading the substrate takes and
+    // does not record is a reading it cannot become aware of.
+    //
+    // Only newCoherency is contributed. originalCoherency is a re-read of a
+    // value the field has already seen; contributing it again would count the
+    // same observation twice and inflate the field.
+    // PROVENANCE (2026-08-09): the total is the heuristic scorer's
+    // aggregate, not a compressor reading — the scorer's own
+    // void:compress_signal doorway witnesses the healed code's lawful
+    // coherency when it scores it. The heal is WORK; the score stays in
+    // the result.
+    try {
+      require('../core/field-coupling').recordCost({
+        units: 1, kind: 'healing', source: 'oracle:healing:healed',
+      });
+    } catch (_) { quiet('unified:healing:require', _); /* field optional — healing must not depend on it */ }
+
     // Track healing to prevent duplicates
     _trackHealing(patternId);
 
@@ -128,75 +148,6 @@ function heal(pattern, options = {}) {
 }
 
 // ─── Strategy Helpers ───
-
-/**
- * Quick heal — used by feedback on failure. Fast, 2 loops max.
- */
-function healQuick(pattern, options = {}) {
-  return heal(pattern, { ...options, strategy: 'quick' });
-}
-
-/**
- * Full heal — used by resolve with healing enabled. 3 loops, full context.
- */
-function healFull(pattern, options = {}) {
-  return heal(pattern, { ...options, strategy: 'full' });
-}
-
-/**
- * Sweep heal — used by lifecycle/optimize. Lower target, capped.
- */
-function healSweep(patterns, options = {}) {
-  const config = { ...HEALING_DEFAULTS, ...options };
-  const maxHeals = config.maxHealsPerSweep;
-  const targetCoherency = config.sweepTargetCoherency;
-
-  // Sort by lowest coherency first — heal worst patterns first
-  const candidates = patterns
-    .filter(p => (p.coherencyScore?.total ?? 0) < targetCoherency)
-    .sort((a, b) => (a.coherencyScore?.total ?? 0) - (b.coherencyScore?.total ?? 0));
-
-  const report = {
-    attempted: 0,
-    healed: [],
-    failed: [],
-    skipped: 0,
-    totalImprovement: 0,
-  };
-
-  for (const pattern of candidates) {
-    if (report.attempted >= maxHeals) break;
-    report.attempted++;
-
-    const result = heal(pattern, {
-      ...options,
-      strategy: 'sweep',
-      targetCoherence: config.targetCoherence,
-    });
-
-    if (result && result.improvement > 0) {
-      report.healed.push({
-        id: pattern.id,
-        name: pattern.name,
-        oldCoherency: result.originalCoherency,
-        newCoherency: result.newCoherency,
-        improvement: result.improvement,
-      });
-      report.totalImprovement += result.improvement;
-    } else if (result?.skipped === 'cooldown') {
-      report.skipped++;
-    } else {
-      report.failed.push({
-        id: pattern.id,
-        name: pattern.name,
-        coherency: pattern.coherencyScore?.total ?? 0,
-        reason: result?.skipped || (result && result.improvement < 0 ? 'regression' : 'no-improvement'),
-      });
-    }
-  }
-
-  return report;
-}
 
 // ─── Decision Helpers ───
 
@@ -226,6 +177,7 @@ function _trackHealing(patternId) {
     }
   }
 }
+_trackHealing.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Clear healing cooldown tracking. Useful for testing.
@@ -236,9 +188,6 @@ function resetTracking() {
 
 module.exports = {
   heal,
-  healQuick,
-  healFull,
-  healSweep,
   needsHealing,
   resetTracking,
   HEALING_DEFAULTS,
@@ -252,39 +201,6 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-heal.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-healQuick.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-healFull.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-healSweep.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-needsHealing.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 2,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-resetTracking.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
+heal.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 3, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+needsHealing.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+resetTracking.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

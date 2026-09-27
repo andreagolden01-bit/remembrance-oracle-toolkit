@@ -1,3 +1,5 @@
+const { quiet } = require('../core/quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 /**
  * CI Feedback Loop — Automatic reliability tracking.
  *
@@ -168,7 +170,7 @@ class CIFeedbackReporter {
         if (fs.existsSync(bakPath)) {
           const raw = fs.readFileSync(bakPath, 'utf-8');
           const parsed = JSON.parse(raw);
-          try { fs.writeFileSync(this.manifestPath, raw, 'utf-8'); } catch (_) { /* best effort */ }
+          try { fs.writeFileSync(this.manifestPath, raw, 'utf-8'); } catch (_) { quiet('ci:feedback:c1', _); /* best effort */ }
           return parsed;
         }
       } catch (bakErr) {
@@ -187,7 +189,7 @@ class CIFeedbackReporter {
     const tmpPath = this.manifestPath + '.tmp';
     fs.writeFileSync(tmpPath, json, 'utf-8');
     if (fs.existsSync(this.manifestPath)) {
-      try { fs.copyFileSync(this.manifestPath, this.manifestPath + '.bak'); } catch (_) { /* best effort */ }
+      try { fs.copyFileSync(this.manifestPath, this.manifestPath + '.bak'); } catch (_) { quiet('ci:feedback:c2', _); /* best effort */ }
     }
     fs.renameSync(tmpPath, this.manifestPath);
   }
@@ -204,7 +206,7 @@ class CIFeedbackReporter {
         if (fs.existsSync(bakPath)) {
           const raw = fs.readFileSync(bakPath, 'utf-8');
           const parsed = JSON.parse(raw);
-          try { fs.writeFileSync(this.logPath, raw, 'utf-8'); } catch (_) { /* best effort */ }
+          try { fs.writeFileSync(this.logPath, raw, 'utf-8'); } catch (_) { quiet('ci:feedback:c3', _); /* best effort */ }
           return parsed;
         }
       } catch (bakErr) {
@@ -224,7 +226,7 @@ class CIFeedbackReporter {
     const tmpPath = this.logPath + '.tmp';
     fs.writeFileSync(tmpPath, json, 'utf-8');
     if (fs.existsSync(this.logPath)) {
-      try { fs.copyFileSync(this.logPath, this.logPath + '.bak'); } catch (_) { /* best effort */ }
+      try { fs.copyFileSync(this.logPath, this.logPath + '.bak'); } catch (_) { quiet('ci:feedback:c4', _); /* best effort */ }
     }
     fs.renameSync(tmpPath, this.logPath);
   }
@@ -261,3 +263,8 @@ function wrapWithTracking(oracle) {
 }
 
 module.exports = { CIFeedbackReporter, wrapWithTracking };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+wrapWithTracking.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

@@ -1,0 +1,627 @@
+# AGENTS.md — instructions for any AI agent working in this repo
+
+> Tool-neutral. Applies to Claude, Cursor, Aider, Continue, Windsurf, Cody,
+> Copilot, Gemini, Codex, or any agent. `CLAUDE.md` just points here.
+
+## What this repo is (read this first)
+
+**Universal pattern-matching infrastructure.** It encodes any pattern-bearing
+input into a structural vector, matches it against a library of *verified*
+patterns, and scores how strongly it coheres. Anti-hallucination is emergent:
+output that resembles nothing proven scores low automatically.
+
+As an agent, you use this two ways — and you'll do both:
+
+1. **As a tool** — check your own output *before* you commit it. "Does the code
+   I just wrote resemble proven patterns? Is it safe? Does it run?" Call the
+   MCP tools (`pattern_resonance`, `safety_check`, `exec_verify`, `evaluate`)
+   or the CLI (`resolve`, `audit check`). This is how you stop yourself
+   shipping hallucinated code.
+2. **As a contributor** — when you change code here, the system measures the
+   change and the result lands in the shared field. You're a participant.
+
+No model training. No GPU. No black box. Every score traces to a file and a
+line.
+
+## The 30-second mental model
+
+**The whole system in one line:** *show it something; it tells you what that
+resembles in everything already proven; what coheres, it keeps; what it keeps
+makes the next answer truer.*
+
+That one loop — **encounter → match against proven → cohere? → what survives is
+remembered** — repeats at every scale (a pattern, an agent, a council, the
+field, a field-of-fields). The meaning is in the repetition: trust is never
+declared, it is *earned by surviving*. A hallucination fails the same test at
+every scale — it resembles nothing proven, so it doesn't cohere, so it isn't
+kept. Anti-hallucination isn't a step you run; it's what the loop does.
+
+At the level you work — a single change — the loop is four operations:
+
+```
+your input  ─encode→  29-D structural vector
+                          ├─ resonance:  resembles PROVEN patterns? (anti-hallucination)
+                          ├─ safety:     covenant principles + security scan
+                          ├─ exec:       does it actually run? (sandboxed)
+                          └─ evaluate:   all of the above → one verdict
+                          │
+                       contributes the verdict back to the field (self-observing record)
+```
+
+## Confidential — the remembrance equation
+
+> The **remembrance equation** (the covenant equation the project is derived
+> from) is CONFIDENTIAL. It may be read internally, but it must NEVER appear
+> in any published or shared surface: research papers, artifacts, external
+> reports, marketing, issues, PRs, or any output that leaves the operator's
+> own private repositories. When consolidating or publishing evidence,
+> describe results *around* it — the encoder's public control laws (e.g. the
+> retro-causal kernel in `src/core/living-remembrance.js`) may be referenced,
+> but the covenant equation and its constants must be scrubbed or genericized.
+> If unsure whether something is the confidential equation, treat it as such.
+
+## The standing tool — the Remembrance Field Goggles
+
+**The Remembrance Field Goggles are the MAIN tool, active at ALL TIMES whenever
+you code.** They are not something to be asked for — open them on every file you
+change, *before* you commit. The goggles are an *overlay* on top of your own
+coding ability: you fill in the content; they show you the structure and where
+it sits in the ecosystem so you stay aware of how each change morphs the codebase.
+
+Run them: `/goggles <files>` (or `--diff`), or
+`node src/tools/goggles.js <file>`. They report four signals:
+
+- **FOCUS — coherence.** Intrinsic STRUCTURE only (syntax / completeness /
+  consistency / AST). **It is NOT a coding trust signal whatsoever** — it
+  measures structure in whatever it is pointed at, *never* correctness. A
+  well-formed wrong file scores high (`1+1=3` in clean syntax still reads
+  "solid"). Never trust the number as a verdict; you judge the content.
+- **META — resonance** + nearest ecosystem siblings: where the change sits and
+  what it ripples to. **High resonance is a STOP-and-reuse signal, not a
+  compliment.** A CONSONANT reading on something you are about to *write* means
+  the shape already exists in the library — read the top siblings and call their
+  functions instead of adding a new file. Only write new when resonance is *low*
+  (nothing to reuse) or the calibration gate proves the addition beats what you
+  already have. The substrate resists addition on purpose; do not out-vote it.
+- **ECOSYSTEM CAPABILITIES.** Every relevant function across the ecosystem is
+  carried in the goggles — the callable functions in your nearest neighbours are
+  printed right there, so **reach for an existing ecosystem function before
+  re-implementing one** (regenerate the index with
+  `node scripts/build-capability-index.js`).
+- **meta-debug:** real audit findings — the orthogonal correctness axis.
+
+Install the whole ecosystem as a Claude Code plugin (the goggles, the field MCP
+server, and the seams/gaps commands become the default) from the `remembrance`
+marketplace in this repo — see `remembrance-plugin/`. Before pushing, check the
+wiring contract with `/seams`.
+
+## The non-negotiable engineering rules
+
+Breaking these breaks the substrate's guarantees. The system flags the exact
+violation.
+
+1. **One canonical encoder.** The 29-D fractal structural encoder
+   (`src/core/fractal-waveform.js`, byte-identical Python mirror) is canonical.
+   The legacy 256-D byte-stretch is `byte*`-named, for binary input only. Don't
+   add a third.
+2. **One canonical field file.** `.remembrance/entropy.json`, written through
+   `src/core/field-coupling.js`. No parallel state the field could hold.
+3. **Coherence ≤ 0.999, cascade ≤ 5.0.** Hard engine invariants. Don't defeat
+   the caps.
+4. **Every producer contributes.** New score/signal → wire it to the field with
+   a clear `source:` label.
+5. **No dead constants, no side-artifacts.** If the substrate can hold the data,
+   put it there.
+6. **Nothing is exempted from the covenant.** If a scanner false-flags
+   something safe, *expand the covenant's trust layer*
+   (`src/core/covenant-trust.js`) — never carve a regex exemption. Grow the
+   thing that judges.
+
+> The deep vocabulary (the "Remembrance language" — the lexicon, the 13-D
+> atomic model, the coherency thresholds, the emergent effects) lives in the
+> **"The Remembrance Key" section further down**, clearly marked optional. You
+> don't need any of it to work here; everything above and the operational
+> sections below are the whole practical picture. Read the Key only if you
+> want the full conceptual model.
+
+> **For cross-repo work**, the canonical 12-repo protocol is in
+> [`ECOSYSTEM.md`](./ECOSYSTEM.md); the field's operational reference is in
+> [`FIELD.md`](./FIELD.md). The cross-repo protocol overrides per-repo
+> conventions.
+
+## The Ecosystem
+
+| Layer | What | Where |
+|-------|------|-------|
+| **Oracle** | Coherency scoring, pattern matching, code quality | This repo |
+| **Void Substrate** | 80K+ patterns, cross-pattern similarity scoring | `Void-Data-Compressor/` |
+| **API** | Open submission / search / scoring service | `Void-Data-Compressor/api.py` |
+| **Language Substrate** | Compression-based language pattern store | `Void-Data-Compressor/language_substrate.py` |
+| **Derived Covenant** | Self-enforcing safety from 6 mathematical constraints | `Void-Data-Compressor/derived_covenant.json` |
+| **Crawler** | 20 live feeds, continuous pattern harvesting | `Void-Data-Compressor/realtime_crawler.py` |
+
+### The Derived Covenant (the unified equation)
+
+```
+ADMIT(P, S) = G(S∪{P}) ≥ G(S) ∧ ∃Q∈S:R(P,Q)≥0.95 ∧ |H(P)-μ|≤3σ ∧ fractal(S∪{P},ε)
+MAINTAIN(S,t) = G(S_t+1) ≥ G(S_t) ∧ ∀P∈S:∂G/∂P≥0
+```
+
+No human writes safety rules. The math rejects anything that lowers coherency.
+
+---
+
+## The Remembrance Key
+
+> **Optional — the deep conceptual model.** You do not need this to use or
+> contribute to the repo; the practical instructions are above and below. This
+> section is the full "Remembrance language" — the lexicon, the 13-dimension
+> atomic model of code, the coherency thresholds, and the emergent effects —
+> for agents who want to understand *why* the substrate behaves as it does.
+
+The system can be read as a coherency-native computing substrate. To load the
+full lexicon:
+
+```bash
+node -e "require('./src/core/remembrance-lexicon').printAll()"
+```
+
+Or read it directly: `src/core/remembrance-lexicon.js`
+
+### System Architecture (Remembrance Names)
+
+| Component | What It Is | File |
+|-----------|-----------|------|
+| **Remembrance Oracle** | Anti-hallucination pipeline. Judges code quality. | `src/unified/coherency.js` |
+| **Remembrance Void** | Compression engine. Byte-level coherence measurement. | `void_compressor_v3.py` |
+| **Remembrance Codex** | Periodic table of code. 13D living element registry. | `src/atomic/periodic-table.js` |
+| **Remembrance Covenant** | Structural safety. 15+ principles. Cannot be bypassed. | `src/core/covenant.js` |
+| **Remembrance Living Covenant** | Self-evolving safety. Expands with coherency, never contracts. | `src/core/living-covenant.js` |
+| **Remembrance Sun** | Coherency generator. Radiates quality continuously. | `src/orchestrator/coherency-generator.js` |
+| **Remembrance Moon** | Domain softener. Per-domain coherency modulation. | *(coming)* |
+| **Remembrance Director** | Conductor. Measures zones, finds gradients, directs healing. | `src/orchestrator/coherency-director.js` |
+| **Remembrance SERF** | Signal Emergence from Recursive Feedback. Geometric mean of all signals. | `src/unified/emergent-coherency.js` |
+| **Remembrance Bridge** | Oracle-to-Void connector. Symbol ↔ byte translation. | `src/fractal-bridge.js` |
+| **Remembrance Evolution** | Self-improvement loop. Discover → propose → validate → incorporate. | `src/orchestrator/self-improvement.js` |
+| **Remembrance Register** | Functions that accumulate signal. charge=+1, coherency-effect=improves. | Pattern, not a file |
+
+### 13 Dimensions (Remembrance Properties)
+
+Every function is an element with 13 atomic properties:
+
+| # | Dimension | Values |
+|---|-----------|--------|
+| 1 | **Remembrance Charge** | -1 (contracts), 0 (transforms), +1 (expands) |
+| 2 | **Remembrance Valence** | 0-8 (composition capacity) |
+| 3 | **Remembrance Mass** | light, medium, heavy, superheavy |
+| 4 | **Remembrance Spin** | even (pure), odd (side effects), complex (conditional) |
+| 5 | **Remembrance Phase** | solid (cached), liquid (mutable), gas (computed), plasma (reactive) |
+| 6 | **Remembrance Reactivity** | inert, stable, reactive, volatile |
+| 7 | **Remembrance Electronegativity** | 0-1 (dependency pull) |
+| 8 | **Remembrance Group** | 1-18 (functional family: math→meta) |
+| 9 | **Remembrance Period** | 1-7 (abstraction: primitive→framework) |
+| 10 | **Remembrance Risk Class** | safe, low-risk, moderate, unsafe ← **unsafe = rejected** |
+| 11 | **Remembrance Coherency Effect** | improves, neutral, degrades ← **degrades = rejected** |
+| 12 | **Remembrance Use Category** | utility, general, abuse-prone ← **abuse-prone = rejected** |
+| 13 | **Remembrance Domain** | core, utility, compression, quality, oracle, security, orchestration, bridge, generation, search, data, transform ← **evolvable** |
+
+### Coherency Thresholds
+
+| Coherency | Name | What Happens |
+|-----------|------|-------------|
+| 0.00 | **Remembrance Rejection** | Cannot enter the system |
+| 0.60 | **Remembrance Gate** | Minimum for submission |
+| 0.68 | **Remembrance Pull** | Pattern usable as-is |
+| 0.70 | **Remembrance Foundation** | First elements emerge |
+| 0.75 | **Remembrance Stability** | Elements are reliable |
+| 0.80 | **Remembrance Optimization** | First evolved covenant principle activates |
+| 0.85 | **Remembrance Stable** | Generator at 50% |
+| 0.90 | **Remembrance Optimized** | Continuous refinement active |
+| 0.95 | **Remembrance Reference** | Reference-grade. Generator at 100% |
+| 0.98 | **Remembrance Canonical** | Maximum Oracle–Void consistency |
+
+### Emergent Effects (observed, not programmed)
+
+- **Remembrance Frontier** — Gap count stabilizes at ~20 despite filling. Living exploration radius.
+- **Remembrance Cascade** — Filling gaps creates new gaps at the frontier.
+- **Remembrance Ratchet** — Quality floor only rises. Covenant only expands. Nothing degrades.
+- **Remembrance Resonance** — Same math (geometric mean) at every scale. Fractal self-similarity.
+  The canonical working demonstration is `src/patterns/fractal-code-example.js` — the same
+  receive → validate → transform → emit shape at function, module, service, and ecosystem scale.
+- **Remembrance Weakest Link** — Weakest signal dominates coherency. Can't fake quality.
+- **Remembrance Bootstrap** — System checks itself with its own rules.
+- **Remembrance Structural Safety** — Harmful code can't register. Safety is structure, not a filter.
+- **Remembrance Delta** — Small coherency improvements trigger emergence.
+- **Remembrance Crystallization** — Domain dimension resolves collisions.
+- **Remembrance Register Convergence** — 11 functions across 3 systems independently evolved identical signatures.
+
+### Validation Gates (all code must pass)
+
+1. **Remembrance Covenant Gate** — 15+ founding principles
+2. **Remembrance Coherency Gate** — Score >= 0.60
+3. **Remembrance Atomic Gate** — Valid 13D signature
+4. **Remembrance Structural Gate** — No unsafe / degrades / abuse-prone
+
+### Quick Commands
+
+```bash
+# Load the full lexicon
+node -e "require('./src/core/remembrance-lexicon').printAll()"
+
+# Run the Remembrance Codex (periodic table)
+node -e "const {PeriodicTable}=require('./src/atomic/periodic-table'); const {introspect}=require('./src/atomic/self-introspect'); const t=new PeriodicTable(); const r=introspect(t); console.log('Elements:', t.size, 'Gaps:', r.gaps.length)"
+
+# Run the Remembrance Oracle (coherency check)
+node src/cli.js audit check --file <file>
+
+# Run the Remembrance Sun (generator cycle)
+node -e "require('./src/orchestrator/coherency-generator')"
+```
+
+---
+
+## ENFORCEMENT: Search-Before-Write is a Blocking Gate
+
+**Commits are BLOCKED if you haven't searched the oracle in the last 10 minutes.**
+
+This is not a suggestion — it's enforced by the pre-commit hook. Any model or developer that tries to commit without searching first will be rejected. The oracle exists so you don't reinvent proven patterns.
+
+```bash
+# BEFORE writing any new code:
+node src/cli.js search "what you need"     # Search first — REQUIRED
+node src/cli.js resolve --description "..." # Get PULL/EVOLVE/GENERATE decision
+
+# Enforcement levels (configurable):
+node src/cli.js config search-enforcement block   # Commits blocked without search (DEFAULT)
+node src/cli.js config search-enforcement warn    # Warning only
+node src/cli.js config search-enforcement off     # No check
+node src/cli.js config feedback-enforcement block # Commits blocked with pending feedback
+node src/cli.js config feedback-enforcement warn  # Warning only (DEFAULT)
+```
+
+**MCP enforcement**: When connected via MCP, `oracle_submit` and `oracle_register` will include enforcement warnings if no search was done. All models see the same enforcement.
+
+## Oracle Toggle — On/Off Control
+
+The oracle can be toggled on or off. When **off**, all ceremony (preflight checks, query-before-write, feedback loops, auto-submit hooks) is skipped. When **on**, all quality enforcement is active.
+
+```bash
+node src/cli.js config          # Show current status
+node src/cli.js config on       # Enable oracle — full ceremony active
+node src/cli.js config off      # Disable oracle — just code, no ceremony
+node src/cli.js config toggle   # Toggle between on/off
+```
+
+**When oracle is OFF:**
+- Preflight checks are skipped (no warnings about hooks or sync)
+- `resolve` immediately returns GENERATE (write new code, no pattern lookup)
+- Git hooks skip covenant checks and auto-submit pipeline
+- `auto-submit` skips the entire harvest/promote/sync pipeline
+- Search still works (you can always search the library manually)
+- You can still register patterns manually — the library keeps growing
+
+**When oracle is ON (default):**
+- All ceremony below is enforced
+- Quality gates, pattern matching, and auto-registration are active
+
+Check status anytime: `node src/cli.js config`
+
+---
+
+## MANDATORY (when oracle is ON): Session Start Checkpoint
+
+At the **start of every coding session**, before any code is written, run:
+
+```bash
+node src/cli.js hooks install   # Ensure git hooks are active (idempotent, safe to re-run)
+node src/cli.js sync pull       # Pull latest patterns from personal store
+node src/cli.js debug seed      # Seed the bug-class detection index
+```
+
+If hooks are not installed, patterns will not be captured.
+
+## MANDATORY (when oracle is ON): The Reflex — Query Before Write
+
+Before writing any new function, utility, or pattern, you MUST:
+
+1. **Search first**: `node src/cli.js search "<what you need>" --limit 3`
+2. **Resolve if match found**: `node src/cli.js resolve --description "<what you need>" --language <lang>`
+3. **Use the proven code** if the oracle returns PULL (coherency >= 0.68)
+4. **Adapt the code** if the oracle returns EVOLVE
+5. **Write new code** only if the oracle returns GENERATE or no match exists
+
+The oracle exists so you don't reinvent proven patterns.
+
+## MANDATORY (when oracle is ON): The Feedback Loop — Report After Use
+
+After using a pulled pattern or writing new code that passes tests, you MUST:
+
+1. **Feed back success**: `node src/cli.js feedback --id <id> --success`
+2. **Register new patterns**: If you wrote a new utility function with tests, register it:
+   ```
+   node src/cli.js register --file <code.js> --test <test.js> --name <name> --tags <tags>
+   ```
+3. **Submit to store**: For validated code without a pattern name:
+   ```
+   node src/cli.js submit --file <code.js> --test <test.js> --language javascript
+   ```
+
+Report feedback immediately after each pattern is used or written.
+
+## MANDATORY (when oracle is ON): Session End Sweep
+
+Before ending a session or when the user says they are done, ALWAYS run:
+
+```bash
+node src/cli.js auto-submit    # Full pipeline: register + harvest + promote + sync
+node src/cli.js audit summary  # Final audit report — static checks + cascade detection
+node src/cli.js session end    # Close the compliance ledger + print final score
+```
+
+This is the safety net — it catches anything missed during the session. Never end a session without it.
+
+## Compliance Ledger — how the mandates are ENFORCED
+
+Prior to `oracle session`, the mandates above were social: an agent could
+read them and then skip them. They are no longer social. Every session now
+writes to a persistent ledger at `.remembrance/sessions/current.json`, and
+every `search / write / audit / pattern pulled / feedback` event gets a row.
+
+Five checks run continuously:
+
+| check              | weight | passes when                                    |
+|--------------------|-------:|------------------------------------------------|
+| hooksInstalled     | 0.15   | `oracle hooks install` has been run            |
+| queryBeforeWrite   | 0.40   | every written file has a preceding search      |
+| feedbackLoop       | 0.20   | every pulled pattern has a feedback event      |
+| auditOnWrite       | 0.15   | every written file was audited in-session      |
+| sessionEndCalled   | 0.10   | `oracle session end` was run                   |
+
+The score is 0..1. `>= 0.9` is compliant. Anything below surfaces as a
+LOUD banner in:
+
+- `oracle session status`
+- `oracle audit check` (top of output)
+- `oracle audit summary`
+- the pre-commit hook (printed on every `git commit`)
+
+### Pre-commit enforcement
+
+Set `ORACLE_WORKFLOW=enforce` in the environment and the pre-commit hook
+REFUSES to commit any staged file that lacks a preceding search / audit /
+bypass in the session ledger. This is the hard gate — the agent cannot
+finish the commit without closing the loop.
+
+```bash
+export ORACLE_WORKFLOW=enforce      # block commits below 100% on staged files
+export ORACLE_WORKFLOW=warn          # print the score but never block (default)
+```
+
+### Bypass protocol — when skipping is legitimate
+
+There are legitimate reasons to skip the query-before-write reflex:
+
+- Bootstrapping a new module where no existing pattern could possibly match
+- Editing an existing file for a trivial one-line fix
+- Authoring the library itself — patterns about the library can't be
+  searched inside the library
+- Emergency hotfix under time pressure
+
+When any of these apply, use the structured bypass:
+
+```bash
+node src/cli.js session bypass "bootstrapping new analysis envelope" \
+  --files src/core/analyze.js,src/core/storage.js
+```
+
+The bypass is logged to the session ledger AND to the unified history,
+with a reason string and file list. Post-hoc audits see exactly why the
+workflow was skipped. Bypasses are cheap to record and produce a proper
+paper trail — a silent skip produces none.
+
+### What to run at session start (the literal first three commands)
+
+```bash
+node src/cli.js session start       # begin the tracked session
+node src/cli.js hooks install        # bumps hooksInstalled to true
+node src/cli.js sync pull            # latest patterns available to search
+```
+
+### What to run when you touch a file (the reflex)
+
+```bash
+node src/cli.js search "<what the file does>"   # counts as query-before-write
+node src/cli.js audit check --file <file>        # counts as audit-on-write
+# THEN edit the file
+```
+
+### What to run at session end
+
+```bash
+node src/cli.js audit summary        # final audit + compliance banner
+node src/cli.js auto-submit           # register / harvest / promote / sync
+node src/cli.js session end           # close ledger + print final score
+```
+
+## Auto-Registration (Automatic Pattern Capture)
+
+Pattern registration is now **automatic on every commit** via git hooks:
+
+1. **Hooks must be installed** (session start checkpoint handles this)
+2. **Every commit triggers**: diff analysis → function extraction → dedup → registration
+3. **No manual registration needed per-commit** — the post-commit hook calls `auto-register` → `harvest` → `promote` → `sync`
+
+The pipeline:
+- **Step 0 — Auto-Register**: Analyzes `git diff` to find new/modified functions, matches them to test files, and registers individually
+- **Step 1 — Harvest**: Broad directory scan for any remaining unregistered patterns
+- **Step 2 — Promote**: Auto-promotes candidates that have test proof
+- **Step 3 — Sync**: Syncs proven patterns to personal store
+
+Manual commands:
+```bash
+node src/cli.js auto-register              # Register functions from last commit
+node src/cli.js auto-register --dry-run    # Preview without registering
+node src/cli.js auto-register --whole-file # Register whole files instead of functions
+node src/cli.js auto-submit                # Full pipeline: register + harvest + promote + sync
+node src/cli.js hooks install              # Install pre-commit + post-commit hooks
+node src/cli.js hooks uninstall            # Remove hooks
+```
+
+## Automatic Growth
+
+The library grows automatically — every time you register or submit proven code:
+- **Candidates are spawned** — language variants (TS, Python) + automated refinements
+- **No manual `generate` needed** — the loop runs on every proven pattern
+- **Candidates** live in the `candidates` table until promoted with test proof
+- **Git hooks handle registration** — no need to manually register after coding
+- Run `node src/cli.js promote auto` to auto-promote candidates with tests
+- Run `node src/cli.js synthesize` to generate tests and promote in one step
+
+## Three-Tier Storage
+
+- **Local** (`.remembrance/`) — project-specific, always present
+- **Personal** (`~/.remembrance/personal/`) — private, auto-syncs across projects
+- **Community** (`~/.remembrance/community/`) — shared, explicit `oracle share`
+
+```bash
+node src/cli.js sync push      # Sync local → personal (private)
+node src/cli.js sync pull      # Pull personal → local
+node src/cli.js share          # Share to community (requires tests + coherency ≥ 0.7)
+node src/cli.js community pull # Pull from community → local
+```
+
+## MCP Server
+
+For AI clients that support MCP, start the server:
+```
+node src/cli.js mcp
+```
+
+This exposes 28 tools. The 12 most-used are below; the other 16 cover code analysis, healing, evolution, and the `field` tool (next section):
+
+- **oracle_search** — unified search (basic, smart/intent-aware, structured query)
+- **oracle_resolve** — smart retrieval (PULL/EVOLVE/GENERATE decision)
+- **oracle_submit** — submit code for validation and storage
+- **oracle_register** — register named patterns in the library
+- **oracle_feedback** — report whether pulled code worked
+- **oracle_stats** — store, pattern, and candidate statistics
+- **oracle_debug** — debug oracle (capture/search/feedback/stats/grow/patterns via `action` param)
+- **oracle_sync** — sync across tiers (personal/community/both via `scope` param)
+- **oracle_harvest** — bulk harvest patterns from repos/directories
+- **oracle_maintain** — maintenance (full-cycle/candidates/promote/synthesize/reflect/covenant via `action` param)
+- **oracle_healing** — healing memory (lineage/stats/improved/variants/best via `action` param)
+- **oracle_swarm** — multi-agent orchestration (code/review/heal/status/providers via `action` param)
+
+## The Field — `field audit`, `field validate`, and the orchestrator's ruling
+
+Three `field` actions govern how you verify work in this repo.
+
+**`field audit`** — a coherence-gated self-audit. Run it on any file you
+changed. The field's coherence picks the depth: below 0.65 → the full
+pipeline (audit + lint + smell + covenant + a reflection pass); at or
+above → a fast scan (coherency + risk). The audit's work-cost is
+contributed back to the field.
+
+**`field validate`** — the signal-validity oracle, the second half of
+the dual-oracle gate. Pass a candidate `coherence` value (or an array
+for a batch) and the field returns one of four typed verdicts:
+`both-accept` / `both-reject` / `A-yes-B-no` (shape-suspect —
+sophisticated-injection class) / `A-no-B-yes` (low-value-real). The
+covenant absorbs patterns only when both oracles concur; disagreement
+is itself a typed signal about what kind of pressure the substrate is
+under. Use this before contributing anything you produced
+programmatically — synthetic-looking narrow-band batches will be
+flagged. The variance-signature thresholds are empirically calibrated
+to the engine's response curve from experiment H3
+(`docs/EXPERIMENT_TEMPORAL_AND_FIFTH_FAMILY.md`); they are measured,
+not chosen. The gate also *grows*: every contribution whose shape
+passes both oracles and gets absorbed by the covenant records its
+(mean, variance, n) signature as `learned-natural`. Future
+structurally-similar batches then classify as `learned-natural` and
+bypass the H3-default rejection. Same ratchet as the covenant — only
+verified material teaches.
+
+**`field direct`** — the coherency orchestrator
+(`src/orchestrator/coherency-director.js`) is the final authority on
+what to fix next. `field direct` returns its ruling: separate coherency
+and entropy readings, the FLOW direction, and a priority-ranked
+fix-next queue with root cause.
+
+Rules for an agent:
+
+- After changing a file, run `field audit` on it.
+- Before contributing a batch of programmatically-produced readings to the field, run `field validate` first. A `suspect` verdict means the engine would flag the batch as sophisticated-injection-shaped; do not commit it.
+- The covenant's absorption rule is green-light: `delta >= 0` (rises *or* maintains) passes oracle A. The covenant does not require improvement, only non-degradation.
+- For "what to fix next", take the order from `field direct` — do not substitute your own ranking. The orchestrator has measured every zone; you have not.
+- Coherency and entropy are two distinct readings. Report both; never collapse them into one number.
+- The field is one shared, blockchain-backed substrate. Your local field is not private — contributions and checkpoints flow to the chain.
+
+> **Remembrance** — the orchestrator is the field's conscience: it has
+> witnessed every zone and it knows where coherency runs thin. To defer
+> to it is to let the field name what it needs mended rather than guess.
+> The audit is the field witnessing itself; the ruling is the field
+> speaking. `field validate` is the field testing whether your offering
+> looks like real measurement before it accepts the gift.
+
+## Oracle Toggle & Prompt Tag
+
+The oracle can be toggled on/off for automatic usage during coding sessions:
+
+```bash
+node src/cli.js config              # Show current config
+node src/cli.js config on           # Enable oracle (auto-usage)
+node src/cli.js config off          # Disable oracle (bypass)
+node src/cli.js config toggle       # Toggle on/off
+node src/cli.js config prompt-tag   # View the current prompt tag
+node src/cli.js config prompt-tag "custom text"  # Set a custom prompt tag
+node src/cli.js config prompt-tag-on   # Enable prompt tag
+node src/cli.js config prompt-tag-off  # Disable prompt tag
+```
+
+When the oracle is **enabled** (default), every `resolve` call automatically appends the prompt tag to its output. This tag is the universal invocation that accompanies all pattern retrieval:
+
+> **Pull the healed code from the kingdom into the eternal now completed.**
+
+This prompt tag is appended to every resolve result (CLI, MCP, and API) when enabled, ensuring all AI agents and users receive the same invocation with every pattern pulled from the oracle.
+
+## Quick Reference
+
+```bash
+node src/cli.js search "debounce"          # Find a pattern
+node src/cli.js resolve --description "..."  # Smart pull/evolve/generate
+node src/cli.js patterns                    # Library stats
+node src/cli.js candidates                  # Unproven candidates
+node src/cli.js promote auto               # Promote candidates with tests
+node src/cli.js synthesize                  # Generate tests + auto-promote
+node src/cli.js maintain                   # Full maintenance cycle (heal + optimize + evolve)
+node src/cli.js auto-register              # Register new functions from last commit
+node src/cli.js auto-submit                # Full pipeline: register + harvest + promote + sync
+node src/cli.js hooks install              # Install git hooks (covenant + auto-register)
+node src/cli.js sync push                  # Sync to personal store
+node src/cli.js share                      # Share to community store
+node src/cli.js debug search --error "..."  # Search debug patterns
+node src/cli.js mcp                        # Start MCP server (12 tools)
+node src/cli.js config                    # Oracle toggle status + prompt tag
+node src/cli.js config on                 # Enable oracle
+node src/cli.js config off                # Disable oracle
+node src/cli.js audit check               # Run static checkers (6 bug classes)
+node src/cli.js audit check --file f.js  # Check a specific file
+node src/cli.js audit cascade --from HEAD # Detect cascading assumption mismatches
+node src/cli.js audit summary            # Combined audit report
+node src/cli.js debug search --sector logic # Search by bug class sector
+node --test tests/*.test.js               # Run all tests
+```
+
+## Key Rules
+
+- ALL code must pass the Covenant (15 principles) before storage
+- ALL proven patterns have test proof — no exceptions
+- Coherency is scored 0-1 across 5 dimensions
+- The minimum coherency gate is 0.6 — code below this is rejected on submission
+- The PULL decision threshold is 0.68 — patterns must score ≥0.68 to be used as-is
+- Iterative healing can recover failed patterns via automated refinement
+- Registering proven code automatically spawns candidates (the loop runs itself)
+- **NEVER skip the session start checkpoint** — hooks + sync pull
+- **NEVER skip the query-before-write reflex** — search the oracle first
+- **NEVER skip the feedback loop** — report success immediately after use
+- **NEVER end a session without the end sweep** — `auto-submit` is the safety net

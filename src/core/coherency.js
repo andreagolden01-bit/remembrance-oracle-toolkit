@@ -148,6 +148,7 @@ function _skipTemplateLiteral(code, i) {
   }
   return i;
 }
+_skipTemplateLiteral.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /** Advance past a ${...} expression inside a template literal. */
 function _skipTemplateExpression(code, i) {
@@ -191,6 +192,7 @@ function _skipTemplateExpression(code, i) {
   }
   return i;
 }
+_skipTemplateExpression.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /** Advance past regex body, handling character classes [..] where / doesn't terminate. */
 function _skipRegexBody(code, i) {
@@ -204,6 +206,7 @@ function _skipRegexBody(code, i) {
   }
   return i;
 }
+_skipRegexBody.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Scores code completeness by detecting incomplete-work markers, placeholders, and empty function bodies.
@@ -278,13 +281,35 @@ function computeCoherencyScore(code, metadata = {}) {
     historicalReliability,
   };
 
-  const weighted = Object.entries(WEIGHTS).reduce((sum, [key, weight]) => {
+  // measurableOnly: a reader with no runtime/historical metadata (e.g. an editor
+  // hook scoring a snippet) can't know testProof or historicalReliability — they
+  // sit pinned at their 0.5 fallbacks and just compress the score toward the
+  // middle. In that mode score ONLY the content-derivable dimensions
+  // (syntax/completeness/consistency) and renormalise their weights to sum to 1,
+  // so the result uses the full 0..1 range instead of a narrow band.
+  let activeWeights = WEIGHTS;
+  if (metadata.measurableOnly) {
+    const wsum = WEIGHTS.syntaxValid + WEIGHTS.completeness + WEIGHTS.consistency;
+    activeWeights = {
+      syntaxValid: WEIGHTS.syntaxValid / wsum,
+      completeness: WEIGHTS.completeness / wsum,
+      consistency: WEIGHTS.consistency / wsum,
+      testProof: 0,
+      historicalReliability: 0,
+    };
+  }
+
+  const weighted = Object.entries(activeWeights).reduce((sum, [key, weight]) => {
     return sum + (scores[key] * weight);
   }, 0);
 
-  // AST-based boost/penalty
+  // AST-based boost/penalty. In measurableOnly the renormalised weighted score
+  // already spans the full range, so a POSITIVE boost would just clamp clean
+  // code to 1.0 and mask completeness/consistency dips — apply AST as a penalty
+  // only there (it can still drop unparseable / over-complex code).
   const ast = astCoherencyBoost(code, language);
-  const total = Math.max(0, Math.min(1, weighted + ast.boost));
+  const astAdj = metadata.measurableOnly ? Math.min(0, ast.boost) : ast.boost;
+  const total = Math.max(0, Math.min(1, weighted + astAdj));
 
   return {
     total: Math.round(total * ROUNDING_FACTOR) / ROUNDING_FACTOR,
@@ -305,24 +330,10 @@ function computeCoherencyScore(code, metadata = {}) {
  * @param {string} code - The code to analyze
  * @returns {string} Detected language (rust, go, java, python, javascript, jsx, html, or unknown)
  */
-function detectLanguage(code) {
-  // Language detection patterns are built dynamically to prevent
-  // self-referential false positives (e.g. this file containing "fn"
-  // in a regex literal being detected as Rust)
-  const rustRe = new RegExp('\\b' + 'fn' + '\\b.*->|let ' + 'mut |' + 'impl' + '\\b');
-  if (rustRe.test(code)) return 'rust';
-  const goRe = new RegExp('\\b' + 'func' + '\\b.*\\{|' + 'package' + '\\b|fmt\\.');
-  if (goRe.test(code)) return 'go';
-  if (/\bpublic\b.*\bclass\b|\bSystem\.out/.test(code)) return 'java';
-  // Check JS before Python to avoid misclassifying JS files that contain
-  // Python keywords in string literals (e.g. template literals with "import os")
-  if (/\bfunction\b.*\{|const |let |=>\s*\{|require\(|import .* from/.test(code)) return 'javascript';
-  // Anchor Python patterns to start of line to avoid matching keywords inside strings
-  if (/^\s*def\b.*:/m.test(code) || /^\s*import\s+\w/m.test(code) || /^\s*print\s*\(/m.test(code)) return 'python';
-  if (/<\/?[a-z][\s\S]*>/i.test(code) && /className|onClick|useState/.test(code)) return 'jsx';
-  if (/<\/?[a-z][\s\S]*>/i.test(code)) return 'html';
-  return 'unknown';
-}
+// Canonical detector lives in src/unified/coherency.js (13+ languages including
+// YAML/TOML/Markdown/Dockerfile/SQL). This module previously shipped its own
+// narrower copy (8 languages); re-exporting prevents the two from drifting.
+const { detectLanguage } = require('../unified/coherency');
 
 module.exports = {
   computeCoherencyScore,
@@ -333,3 +344,12 @@ module.exports = {
   checkBalancedBraces,
   WEIGHTS,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+scoreSyntax.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkBalancedBraces.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 4, harmPotential: "none", alignment: "degrading", intention: "neutral", domain: "utility" };
+scoreCompleteness.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+scoreConsistency.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 12, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeCoherencyScore.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };

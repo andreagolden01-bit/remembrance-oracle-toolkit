@@ -20,7 +20,7 @@ const { checkFraming, PROPOSED_SEAL } = require('./framing-patterns');
 function framingCheck(code, filePath) {
   const result = checkFraming(code, filePath);
   if (!result.flagged) return { passed: true, severity: 'low', check: 'framing' };
-  return {
+  const __retVal = {
     passed: false,
     severity: result.findings.some(f => !f.disclaimerPresent && f.severity === 'medium') ? 'medium' : 'low',
     check: 'framing',
@@ -28,14 +28,13 @@ function framingCheck(code, filePath) {
     remedy: result.remedy,
     details: result.findings,
   };
+  // field contribution removed: contributed unnamed scalar, not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
 
-framingCheck.atomicProperties = {
-  charge: 0, valence: 2, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'reactive', electronegativity: 0.85, group: 18, period: 7,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'covenant',
-};
+framingCheck.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // Approved seals — promoted from proposed to active by self-improve
 const ACTIVE_SEALS = [
@@ -73,3 +72,8 @@ module.exports = {
   framingCheck,
   runAllChecks,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+runAllChecks.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

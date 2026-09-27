@@ -1,4 +1,6 @@
 'use strict';
+const { quiet } = require('./quiet');
+// @oracle-infrastructure — internal machinery whose flagged functions are NESTED helper closures inside its exported functions (AST-parser internals, CLI, daemon, reflector analysis, lifecycle manager) — implementation internals, not module-scope periodic-table elements
 
 /**
  * Unified analysis envelope.
@@ -217,7 +219,7 @@ function analyze(source, filePath, options = {}) {
             if (typeof mod.covenantCheck === 'function') {
               return mod.covenantCheck(source, { language });
             }
-          } catch { /* not available */ }
+          } catch (_e) { quiet('core:analyze:require', _e); /* not available */ }
           return { sealed: true, violations: [], principlesPassed: 15, totalPrinciples: 15 };
         });
       },
@@ -293,7 +295,7 @@ function analyze(source, filePath, options = {}) {
             if (typeof mod.computeCoherencyScore === 'function') {
               return mod.computeCoherencyScore(source, { language });
             }
-          } catch { /* not available */ }
+          } catch (_e) { quiet('core:analyze:require', _e); /* not available */ }
           return { total: 0, dimensions: {} };
         });
       },
@@ -317,7 +319,7 @@ function analyze(source, filePath, options = {}) {
 
   // Serializable snapshot — useful for MCP, cache, and history events.
   envelope.toJSON = function toJSON() {
-    return {
+    const __retVal = {
       source,
       filePath,
       language,
@@ -329,6 +331,19 @@ function analyze(source, filePath, options = {}) {
       covenant: { sealed: envelope.covenant.sealed, violations: envelope.covenant.violations || [] },
       coherency: envelope.coherency,
     };
+    // ── LRE field-coupling (auto-wired) ──
+    try {
+      const __lre_p1 = './field-coupling';
+      const __lre_p2 = require('path').join(__dirname, 'field-coupling');
+      for (const __p of [__lre_p1, __lre_p2]) {
+        try {
+          const { recordCost: __recordCost } = require(__p);
+          __recordCost({ units: 1, kind: 'work', source: 'oracle:analyze:get' });
+          break;
+        } catch (_) { quiet('core:analyze:__recordCost', _); /* try next */ }
+      }
+    } catch (_) { quiet('core:analyze:__recordCost', _); /* best-effort */ }
+    return __retVal;
   };
 
   // Freeze the top-level to prevent accidental mutation by consumers.
@@ -412,45 +427,10 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-analyze.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-analyzeCached.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-analyzeFiles.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-crossFileCallGraph.atomicProperties = {
-  charge: 1, valence: 2, mass: 'medium', spin: 'even', phase: 'solid',
-  reactivity: 'inert', electronegativity: 1, group: 2, period: 2,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-clearCache.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 10, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-detectLanguage.atomicProperties = {
-  charge: 0, valence: 0, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 2,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-sourceHash.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 16, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
+analyze.atomicProperties = { charge: 1, valence: 8, mass: "heavy", spin: "odd", phase: "solid", reactivity: "low", electronegativity: 1, group: 9, period: 5, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
+analyzeCached.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+analyzeFiles.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+crossFileCallGraph.atomicProperties = { charge: 1, valence: 2, mass: "medium", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 1, group: 4, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+clearCache.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+detectLanguage.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+sourceHash.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

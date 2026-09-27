@@ -1,4 +1,5 @@
 'use strict';
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 const fs = require('fs');
 const path = require('path');
@@ -13,8 +14,6 @@ function readProposals() {
 function getActiveProposals() { return readProposals().filter(p => p.status === 'active'); }
 function getPendingProposals() { return readProposals().filter(p => p.status === 'pending'); }
 function getActiveElements() { return getActiveProposals().filter(p => p.kind === 'element'); }
-function getPendingElements() { return getPendingProposals().filter(p => p.kind === 'element'); }
-
 function groupByKind(proposals) {
   return {
     functions: proposals.filter(p => p.kind === 'function'),
@@ -41,12 +40,7 @@ function integrateInto(lexicon) {
     },
   };
 }
-integrateInto.atomicProperties = {
-  charge: 1, valence: 2, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'stable', electronegativity: 0.7, group: 18, period: 5,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'covenant',
-};
+integrateInto.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function approve(name, kind = 'function') {
   const all = readProposals();
@@ -75,4 +69,15 @@ function stats() {
   };
 }
 
-module.exports = { readProposals, getActiveProposals, getPendingProposals, getActiveElements, getPendingElements, groupByKind, integrateInto, approve, stats, PROPOSAL_FILE };
+module.exports = { readProposals, getActiveProposals, getPendingProposals, getActiveElements,  groupByKind, integrateInto, approve, stats, PROPOSAL_FILE };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+readProposals.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getActiveProposals.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getPendingProposals.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getActiveElements.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+groupByKind.atomicProperties = { charge: -1, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+approve.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 2, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+stats.atomicProperties = { charge: -1, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

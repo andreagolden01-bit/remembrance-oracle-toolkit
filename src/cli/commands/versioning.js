@@ -176,3 +176,8 @@ function registerVersioningCommands(handlers, { oracle, jsonOut }) {
 }
 
 module.exports = { registerVersioningCommands };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+registerVersioningCommands.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 3, period: 5, harmPotential: "dangerous", alignment: "healing", intention: "benevolent", domain: "utility" };

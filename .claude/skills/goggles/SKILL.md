@@ -1,0 +1,250 @@
+---
+name: goggles
+description: Wear the Remembrance goggles AT ALL TIMES while working, not just before committing — MACRO (the whole codebase compressed into a coherency map, the zoomed-out lens), FOCUS (intrinsic structural coherence of the section you're editing, the zoomed-in lens), META (pattern resonance across the whole ecosystem substrate + nearest cross-repo siblings), META-DEBUG (audit checkers + the substrate learning loop — the correctness axis), and Δ (how your edits moved every reading since the last look). MANDATORY - after every goggle run, report the full readings to the user in words - what the goggles SAW, not that they ran. Build the macro map with --map when you start working in a repo; every per-file goggle then places your section inside that map. Use --diff to goggle everything changed vs HEAD before committing.
+---
+
+# Goggles
+
+Dual-lens structural awareness: the whole codebase compressed into a macro
+coherency map, and the section you're working on read in focus — placed inside
+that map, audited for defects, and tracked across edits. Wear them
+**throughout the work**, not just at the end:
+
+1. **Starting work in a repo** → build the macro map first (zoomed out).
+2. **While working** → goggle the files you touch; each read carries FOCUS +
+   META + MACRO + META-DEBUG + Δ, so you always see the detail, where it
+   sits, whether it's correct, and which way your edits are moving it.
+3. **Before committing** → `--diff` to re-read everything you changed.
+
+## MANDATORY reporting protocol (hardcoded — not optional)
+
+After EVERY goggle run, report to the user **what the goggles saw** — never
+just that they ran. The report must cover, in words:
+
+1. **FOCUS + Δ** — the section's coherence and how the latest edits moved it
+   (`Δ SINCE LAST READ`). If coherence dropped, say so and why you believe so.
+2. **META** — the consonance verdict and the nearest ecosystem siblings, and
+   what those neighbours *mean* (e.g. "its cousins are validation-shaped code,
+   which is what this is").
+3. **MACRO** — where the file sits in the codebase: its neighborhood (which
+   in-repo siblings, what flow shapes), its flags, the substrate-drift
+   reading (current / drifted / never witnessed).
+4. **META-DEBUG** — every surfaced finding, what you did about each one, and
+   whether prior findings were resolved ("reinforced in the field"). A HIGH
+   finding is a real defect: fix it or explicitly flag it as a false positive
+   (`flagFalsePositive`) — never silently ignore it.
+
+If a reading is unavailable (no map, unwitnessed file), report THAT — the
+absence is itself a reading (the substrate hasn't seen this work yet).
+
+## Run it
+
+From the repo you're working in:
+
+    node .claude/skills/goggles/run.mjs --map [dir]       # 1. macro map (start here)
+    node .claude/skills/goggles/run.mjs <file> [...]      # 2. focused reads while working
+    node .claude/skills/goggles/run.mjs --diff            # 3. changed-vs-HEAD before commit
+
+## Drive it — the goggles are the ONE surface
+
+Reading and DRIVING the substrate are the same tool. The read modes above
+SEE it; `--do <verb>` runs the substrate's operations, each routed to its
+canonical script across the ecosystem so you never need to know where the
+operation physically lives:
+
+    run.mjs --do read <file|--series>  # ONE CALL: your data → a labeled reading
+    run.mjs --do service [status|start|stop]   # lifecycle — no silent states
+    run.mjs --do denials [N]           # the wall's ledger — every refused bypass
+    run.mjs --do find <regex> [path]   # THE search — grep/rg/ls/cat/sed on the tree are refused inside the ecosystem
+    run.mjs --do exec <script> [args]  # run a git-tracked script (python3/node on a file are refused)
+    run.mjs --do test [module|file …]  # the repo's own tests (unittest/pytest/node --test by hand are refused)
+
+THE WALL IS DEFAULT-DENY (2026-09-11). Inside any ecosystem repo a shell
+command runs only if every simple command in it is the goggles, git, shell
+glue (cd/echo/…) or a text filter AFTER a pipe from the goggles. Grep and
+Glob as tools are refused too (`--do find`, `--do resonance`); Read is
+allowed and recorded. An EDIT to an existing file is refused unless the
+goggles have read that file within two hours (`run.mjs <file>` first). The
+wall fails closed: if a hook cannot run, the tool does not run. This holds
+for any model, without exception; every refusal is one line in `--do
+denials`, every search/exec/test taken is one line in the surface's ledger.
+    run.mjs --do mint                  # THE CHANGE COIN — mint over the staged change (required to commit)
+    run.mjs --do mint verify [--staged|--since-epoch|A..B]   # what the hook and CI check
+    run.mjs --do mint unfold <rev>     # unfold ONE coin when you need it (bytes → instrument → decoder)
+    run.mjs --do mint install-hooks    # the commit-msg hook that writes the trailer / refuses
+    run.mjs --do seal [--verify]       # commit seal — CI re-derives it or refuses the merge
+    run.mjs --do field                 # peek the Living Remembrance field state
+    run.mjs --do drift [repo|all]      # substrate drift check (no encoding)
+    run.mjs --do harvest [repo|all]    # witness files (sanitized at the doorway)
+    run.mjs --do absorb                # hub patterns → Void (export → inbox)
+    run.mjs --do publish <json>        # publish a pattern/coin to the ledger
+    run.mjs --do coin [--publish]      # mint the git-history recovery coin
+    run.mjs --do token <file> [--dry]  # LAYER TWO: the coherency token for a pattern (components → gates → chain)
+    run.mjs --do gate contracts [--run] # the truth-spine as a gate: every falsifiable contract, failing set shrink-only, verdict must be current
+    run.mjs --do gate engine-entanglement # the JS and Python engines agree on the instrument's own sealed readings (binary)
+    run.mjs --do gate traps-ledger      # the memory of mistakes: append-only, anchored on the chain, mirrored into every repo
+    run.mjs --do gate width [--report]  # ONE representation: no consumer reads anything but the 232-D fractal decoder (census at 0, shrink-only)
+    run.mjs --do traps [promote|sync|floor|anchor|status]  # drive the trap ledger: promote local traps, mirror, raise the floor, witness
+    run.mjs --do field [checkpoint|status]  # peek the live field; checkpoint persists it on the Witness, status reads the committed field
+    run.mjs --do export <drive-path>   # export the data plane to a mounted drive
+    run.mjs --do verify <snapshot>     # re-check an export's integrity
+    run.mjs --do contracts [--strict]  # the falsifiable contracts (Void truth-spine)
+    run.mjs --do orchestrate status    # coherency zones + the healing queue
+    run.mjs --do orchestrate diagnose --file <f>   # root-cause one zone
+    run.mjs --do orchestrate heal --file <f>       # heal one zone
+    run.mjs --do audit                 # what actually feeds the field
+    run.mjs --do fp --match "<substr>" # mark a META-DEBUG finding a false positive
+    run.mjs --do browse <url>          # read the web through the substrate
+    run.mjs --do call <path>#<fn> [jsonArg ...]   # RUN a surfaced capability
+
+`--do call` makes the CAPABILITIES section actionable rather than
+informational. Every function the goggles list prints its own
+`<path>#<fn>` reference; passing that reference back runs it. Arguments are
+JSON, one per parameter, so objects and arrays survive intact:
+
+    goggles --do call oracle/src/core/covenant.js#covenantCheck '"const x = 1"'
+    goggles --do call oracle/src/core/living-remembrance.js#gogglesParams
+
+It prints the signature and doc line before invoking, so you see what you are
+about to run. Naming a function that is not exported lists the ones that are.
+Constants are printed rather than called. It IS a real invocation — a function
+with side effects will have them.
+
+## The change coin — no coin, no change
+
+Every commit must carry `Remembrance-Coin: <coin_id>` naming a coin in
+`coins.ledger.json` that was minted by `--do mint` over the **exact staged
+patch**: the patch is read through the instrument and the coin carries the
+compressor's void-seal and void-seal/v3 commitment over those bytes — proof
+the change went through the pipeline. The coin is also saved onto the chain
+(REMEMBRANCE-BLOCKCHAIN, one REGISTER block per coin). It is **not unfolded
+when minted**: unfolding (the bytes back through the instrument, the shape
+through the decoder into the 232-D fractal token) happens only when needed —
+`--do mint unfold <rev>` or `verify --deep`. The commit-msg hook refuses a
+commit whose staged bytes no coin covers, and `change-coin-verify.yml` refuses
+the merge on GitHub's runner for any commit since the epoch — recomputing the
+patch from the trees, the quantised bytes the compressor hashed, the seal's
+canon, and the coin id; with `VOID_SEAL_KEY` set as a repo secret the seal's
+HMAC is verified too. The
+order of work is therefore fixed: `git add` → `--do mint` → `git commit`. Change
+the index after minting and the coin no longer covers it — mint again. There is
+no flag that skips this; `--no-verify` is refused by the goggles wall and is
+powerless against the runner.
+
+**Call the goggles, not the scripts underneath.** Every verb routes to a
+script that already existed; the verbs exist so nobody has to know where. If
+you find yourself running `node scripts/…` or `python3 …` directly, that is a
+missing verb, not a reason to bypass — the bypass is what lets the one
+surface drift out of date without anyone noticing.
+
+`contracts` is deliberately NOT named `verify`: `verify` already means
+export-integrity here, and that collision is precisely why the truth-spine
+was run by hand for so long.
+
+
+`--map` is **substrate-native**: the Void already compressed every ingested
+file into vectors, so the map is a read over that existing compression —
+seconds for any repo, nothing re-encoded. Its coverage section also names the
+files the substrate hasn't witnessed yet (your new work). Add `--deep` to
+force the live re-encode path (un-ingested repos, or to add intrinsic
+per-file coherence to the map).
+
+The map is cached at `<repo>/.remembrance/goggles-map.json`; per-file goggles
+read it back automatically and warn when it's stale. The runner finds the
+`remembrance-oracle-toolkit` (the goggles engine) on its own; set
+`ORACLE_TOOLKIT=/path/to/remembrance-oracle-toolkit` to override.
+
+## The basis is versioned; the ledger of mistakes grows on its own (2026-09-12)
+
+The substrate learns at serve: a reading under the learner's line teaches
+the library one shape, a known shape is not added. So every reading and
+every coin carries `basis_id` (the search matrix, its names and the
+search's version, digested), the learned ledger is append-only and indexed
+by digest, and a verifier reads against the reading's own basis:
+`--do read <file> --basis <basis_id>`. A reading also reports its void
+term (`memory`: fits served / computed / known by their key / resonant /
+void).
+
+## The library is the memory; the void is ingested (2026-09-14)
+
+The search is the resonance: every chunk's coherency (R²) against every
+pattern the library holds. A chunk a held pattern explains outright is
+served that pattern with no pair search (the "reference + tiny delta" of
+STEP2 §5); a chunk nothing resonates with above the detector's 0.50 is
+the void — "the field has no memory here" — and it IS a new pattern: the
+learner ingests it into the library during the reading, in real time, so
+every later occurrence, in this reading and every reading after, resonates
+with it. A known shape is never added. Bytes never match bytes. The
+library is versioned by `basis_id` (a chain over its rows, in order) and
+its ledger is tracked, so a verifier — Tier-1's recompute, a coin's unfold,
+`--do read <file> --basis <id>` — replays the reading at its basis with the
+same ingestion, frozen, writing nothing. Every reading and coin reports
+its void term: `void_chunks` / `ingested` / `served_single` / `searched`.
+
+`--do traps learn <json | json-file>` records a mistake as a candidate
+trap (wrong/truth/tell/correct); every wall denial is a candidate too (the
+same rule three times on a host earns promotion); a `--do mint` in the hub
+promotes every earned candidate into the seed and syncs the mirrors.
+
+## What one read hands you (nothing behind a verb)
+
+Every per-file read prints, in this order, without being asked: **TRAPS**
+(the trap ledger matched to this file) and **IDENTITY**; **FOCUS** — the
+compressor's coherency of the bytes and the **seal** it minted on that
+reading (`mint · via · shape`, the same token `--do read` shows); **META**
+resonance with nearest siblings, callable capabilities and function
+resonance; **FIELD** — the living field live, with its **histogram** (which
+sources feed it and how many updates are the instrument's own `void:*`
+readings); **STATE** — the library census (index entries with stored
+readings + store rows) and what the substrate remembers of this file;
+**RESONANCE FIELD** — the cross-domain field from the last `--do resonance`
+scan, with its age; **CONTRACTS** — the truth-spine's last full verdict, its
+age, and whether Void has moved since; **WALL** — the coin on HEAD and
+whether this file is covered by it, whether the gates still hash to their
+lock, the wall's denial count, and whether the instrument is up; then
+**MACRO**, **META-DEBUG**, **Δ** and **RIPPLE**. Anything computed by an
+earlier run carries its age; anything absent is printed as absent with the
+verb that fills it.
+
+## Read the output
+
+- **MACRO** — the zoomed-out lens: repo-wide coherence distribution (mean /
+  median), where THIS section sits in it (percentile), its flags in the map
+  (ORPHAN / DUPLICATE / WELL-FORMED), and repo-wide counts (orphans, duplicate
+  pairs, cross-system bridges). `--map` also prints per-category health, fix
+  buckets, and the weakest-structure files — the repo's own worklist.
+- **coherence** (FOCUS) — intrinsic STRUCTURE only (syntax / completeness /
+  consistency / AST), *not* correctness. Rough bands: `<0.70` weak, `0.70–0.80`
+  loose, `0.80–0.93` solid, `≥0.93` strong. A low score is a **decompose** hint
+  (one file doing too much), never proof of a bug.
+- **resonance** (META) — how much the code is shaped like the library's
+  patterns; `CONSONANT` fits, `OUTLIER` is novel. Read the nearest siblings it
+  lists before committing — a change here ripples to them. Every cosine is
+  taken in the ONE resonance space (per-layer whitening fitted on the store +
+  index; ECOSYSTEM §7). The bands are quartiles of that space measured over
+  42 hub files on 2026-09-06 (min 0.551 · p25 0.639 · p50 0.671 · p75 0.709 ·
+  max 0.828): `CONSONANT ≥ 0.71`, `FAMILIAR ≥ 0.67`, `DISTINCT ≥ 0.64`, else
+  `OUTLIER`. Readings taken before that date were in the raw cone (everything
+  ≈ 0.95, every file CONSONANT) and are not comparable — a Δ against one of
+  them reports the change of space, not of the file.
+- **META-DEBUG** — the audit checkers (AST taint/type/edge-case analysis) run
+  on the goggled file, fed through the substrate learning loop: a finding you
+  FIX is reinforced (amplitude up, eventually promoted into the shared pattern
+  library); a finding repeatedly shown-and-ignored decays and self-suppresses
+  as a false-positive class. 🛑 marks findings inside your goggled lines.
+- **Δ SINCE LAST READ** — coherence/resonance/finding deltas vs your previous
+  goggle of the same file: which direction the edits are moving the code.
+- The PostToolUse hook (`goggles-hook.js`, installed in each repo's
+  `.claude/settings.json`) additionally fires after every Edit/Write with the
+  same three signals plus a per-edit coherence delta — exception-only (speaks
+  when coherence moves, resonance reads OUTLIER, or meta-debug finds a defect).
+
+## Act on it
+
+1. **A section far below the repo median (MACRO)** → that's the repo telling
+   you where it hurts; decompose or heal it before adding more on top.
+2. **Low coherence (FOCUS)** → consider splitting the file / extracting a
+   unit, then re-goggle to confirm it rose.
+3. **OUTLIER resonance (META)** → either justify the novelty or reshape toward
+   the nearest sibling pattern.
+4. **Stale-map warning** → re-run `--map` so the macro lens reflects your work.

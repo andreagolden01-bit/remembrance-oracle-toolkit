@@ -14,9 +14,9 @@ const {
 
 const NOW = new Date('2026-03-15T00:00:00Z');
 
-function daysAgo(days) {
+const daysAgo = (days) => {
   return new Date(NOW.getTime() - days * 86400000).toISOString();
-}
+};
 
 describe('Confidence Decay', () => {
   describe('daysBetween', () => {

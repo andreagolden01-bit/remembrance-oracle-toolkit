@@ -17,11 +17,11 @@ const {
 } = require('../src/evolution/test-synth');
 const { RemembranceOracle } = require('../src/api/oracle');
 
-function makeTempDir() {
+const makeTempDir = () => {
   const dir = path.join(os.tmpdir(), `synth-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
-}
+};
 
 describe('Test Synthesizer', () => {
   describe('extractSignature', () => {

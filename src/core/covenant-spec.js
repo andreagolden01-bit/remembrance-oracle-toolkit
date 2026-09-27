@@ -35,6 +35,7 @@ function _resolvePath() {
   }
   return null;
 }
+_resolvePath.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function load() {
   if (_cache) return _cache;
@@ -55,29 +56,18 @@ function threshold(name, fallback = 0) {
   return typeof v === 'number' ? v : fallback;
 }
 
-function waveformConstant(name, fallback = 0) {
-  const v = load().waveform[name];
-  return typeof v === 'number' ? v : fallback;
-}
-
 function principles() { return load().principles; }
-function principleById(id) {
-  const p = principles().find(x => x.id === id);
-  if (!p) throw new Error(`no principle with id=${id}`);
-  return p;
-}
-function structuralGates() { return load().structural_gates; }
-function domainsForUri() { return load().domains_for_uri; }
-
-function specPath() { load(); return _cachedPath; }
-
 module.exports = {
   load,
   threshold,
-  waveformConstant,
+
   principles,
-  principleById,
-  structuralGates,
-  domainsForUri,
-  specPath,
+
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+load.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 10, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+threshold.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+principles.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

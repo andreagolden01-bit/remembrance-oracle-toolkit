@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Pattern Composition Engine
  *
@@ -219,7 +220,7 @@ class PatternComposer {
       imports,
     });
 
-    return {
+    const __retVal = {
       code,
       patterns: resolved.map(r => ({
         name: r.name,
@@ -232,6 +233,24 @@ class PatternComposer {
       imports,
       description: composedDescription,
     };
+    // ── LRE field-coupling (auto-wired) ──
+    try {
+      const __lre_p1 = '../core/field-coupling';
+      const __lre_p2 = require('path').join(__dirname, '../core/field-coupling');
+      for (const __p of [__lre_p1, __lre_p2]) {
+        try {
+          const { recordCost: __recordCost } = require(__p);
+          // NO AVERAGING. This used to reduce the composed patterns to one
+          // mean coherency. Each pattern's own reading goes in as itself;
+          // patterns without one contribute nothing rather than a zero.
+          for (const __p2 of (__retVal.patterns || [])) {
+            __recordCost({ units: 1, kind: 'work', source: 'oracle:composer:compose' });
+          }
+          break;
+        } catch (_) { quiet('patterns:composer:__recordCost', _); /* try next */ }
+      }
+    } catch (_) { quiet('patterns:composer:__recordCost', _); /* best-effort */ }
+    return __retVal;
   }
 
   /**

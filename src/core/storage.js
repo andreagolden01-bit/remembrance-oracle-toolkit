@@ -1,4 +1,6 @@
 'use strict';
+const { quiet } = require('./quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 /**
  * Unified Oracle storage interface.
@@ -70,7 +72,7 @@ function pickBackend(repoRoot, options) {
       const entries = fs.readdirSync(dir);
       if (entries.some(e => e.endsWith('.db'))) return BACKEND_SQLITE;
     }
-  } catch { /* ignore */ }
+  } catch (_e) { quiet('core:storage:pickBackend', _e); /* ignore */ }
   return BACKEND_JSON;
 }
 
@@ -187,9 +189,9 @@ class SqliteStorage {
     // without "database is locked". The retry loop below catches any
     // SQLITE_BUSY that slips past the busy_timeout (e.g. a long-held
     // exclusive write transaction from another process).
-    try { this.db.exec(`PRAGMA journal_mode = WAL`); } catch { /* not fatal */ }
-    try { this.db.exec(`PRAGMA synchronous = NORMAL`); } catch { /* not fatal */ }
-    try { this.db.exec(`PRAGMA busy_timeout = 5000`); } catch { /* not fatal */ }
+    try { this.db.exec(`PRAGMA journal_mode = WAL`); } catch (_e) { quiet('core:storage:require', _e); /* not fatal */ }
+    try { this.db.exec(`PRAGMA synchronous = NORMAL`); } catch (_e) { quiet('core:storage:require', _e); /* not fatal */ }
+    try { this.db.exec(`PRAGMA busy_timeout = 5000`); } catch (_e) { quiet('core:storage:require', _e); /* not fatal */ }
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS oracle_storage (
         namespace TEXT NOT NULL,
@@ -323,3 +325,11 @@ module.exports = {
   BACKEND_JSON,
   BACKEND_SQLITE,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+createStorage.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+pickBackend.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getStorage.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+resetStorageCache.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

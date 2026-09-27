@@ -238,94 +238,45 @@ function hasNullGuardAfter(tokens, callIdx, varName, window) {
         (tokens[i + 2]?.value === 'null' || tokens[i + 2]?.value === 'undefined')) {
       return true;
     }
+
+    // Ternary guard: `x ? x.y : z`
+    if (next?.value === '?') return true;
+    // Default via ||: `x || fallback`
+    if (next?.value === '||') return true;
+    // Assertion standing in for a guard — the test idiom:
+    //   const hsts = headers.find(...); assert.ok(hsts); hsts.value...
+    // An assertion IS the null check in a test; treating it as unguarded
+    // reported five correctly-written test cases as high-severity defects.
+    if (prev?.value === '(') {
+      const p2 = tokens[i - 2]?.value;
+      const p3 = tokens[i - 3]?.value;
+      const p4 = tokens[i - 4]?.value;
+      if (p2 === 'assert' || p2 === 'expect') return true;
+      if (p3 === 'assert' && (p2 === 'ok' || p2 === 'truthy')) return true;
+      if (p4 === 'assert' || p4 === 'expect') return true;
+    }
   }
   return false;
-}
-
-/**
- * Given two call graphs (before/after), diff the function signatures and
- * return cascade findings where a caller no longer matches the new shape.
- */
-function diffCallGraphs(before, after) {
-  const findings = [];
-  for (const [name, afterDefs] of after.defs.entries()) {
-    const beforeDefs = before.defs.get(name);
-    if (!beforeDefs) continue; // new function, no cascade
-    const b = beforeDefs[0];
-    const a = afterDefs[0];
-
-    // Arity change
-    if (a.arity !== b.arity) {
-      const callers = after.calls.get(name) || [];
-      for (const c of callers) {
-        if (c.args.length !== a.arity) {
-          findings.push({
-            file: c.file,
-            line: c.line,
-            column: c.column,
-            bugClass: 'integration',
-            ruleId: 'integration/arity-mismatch',
-            assumption: `${name}() takes ${c.args.length} arguments`,
-            reality: `${name}() signature changed — now takes ${a.arity} arguments (was ${b.arity})`,
-            severity: 'high',
-            suggestion: `Update the call site to match the new signature`,
-            code: `${name}(...${c.args.length} args...)`,
-          });
-        }
-      }
-    }
-
-    // Async transition
-    if (a.async !== b.async) {
-      const callers = after.calls.get(name) || [];
-      for (const c of callers) {
-        findings.push({
-          file: c.file,
-          line: c.line,
-          column: c.column,
-          bugClass: 'integration',
-          ruleId: 'integration/async-transition',
-          assumption: `${name}() ${b.async ? 'was async' : 'was sync'}`,
-          reality: `${name}() is now ${a.async ? 'async' : 'sync'} — caller needs to ${a.async ? 'await' : 'stop awaiting'}`,
-          severity: 'high',
-          suggestion: a.async ? `Add await: const x = await ${name}(...)` : `Remove await: const x = ${name}(...)`,
-          code: `${name}(...)`,
-        });
-      }
-    }
-  }
-  return findings;
 }
 
 module.exports = {
   buildCallGraph,
   findNullDerefCascades,
-  diffCallGraphs,
+
   hasNullGuardAfter,
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-buildCallGraph.atomicProperties = {
-  charge: 1, valence: 0, mass: 'heavy', spin: 'odd', phase: 'solid',
-  reactivity: 'low', electronegativity: 0, group: 8, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
-findNullDerefCascades.atomicProperties = {
-  charge: 0, valence: 0, mass: 'heavy', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 3, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
-diffCallGraphs.atomicProperties = {
-  charge: 1, valence: 0, mass: 'heavy', spin: 'odd', phase: 'gas',
-  reactivity: 'low', electronegativity: 0, group: 3, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
-hasNullGuardAfter.atomicProperties = {
-  charge: 0, valence: 0, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'quality',
-};
+buildCallGraph.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "odd", phase: "solid", reactivity: "low", electronegativity: 0, group: 8, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+findNullDerefCascades.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+hasNullGuardAfter.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "benevolent", domain: "utility" };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+collectCalls.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+collectTopLevelCalls.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+scanTokensForCalls.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+findResultBinding.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractArgs.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+findTokenByLineCol.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

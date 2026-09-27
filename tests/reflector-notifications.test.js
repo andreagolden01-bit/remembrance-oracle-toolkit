@@ -16,15 +16,15 @@ const {
 
 const TEST_ROOT = join(__dirname, '__tmp_notifications_test__');
 
-function setup() {
+const setup = () => {
   mkdirSync(join(TEST_ROOT, '.remembrance'), { recursive: true });
-}
+};
 
-function cleanup() {
+const cleanup = () => {
   if (existsSync(TEST_ROOT)) {
     rmSync(TEST_ROOT, { recursive: true, force: true });
   }
-}
+};
 
 // ─── detectPlatform ───
 

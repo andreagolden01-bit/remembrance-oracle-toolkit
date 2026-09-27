@@ -22,6 +22,14 @@ fi
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 cd "$REPO_ROOT"
 
+echo "[covenant] gate zero: are the gates themselves untouched?"
+if ! node scripts/gate-lock.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — a gate script changed. Gates change only by the owner:"
+  echo "[covenant]   node scripts/gate-lock.js --relock --reason \"<why>\"   (ledgered, then anchor on the Witness)"
+  exit 1
+fi
+
 echo "[covenant] running cathedral diagnostic..."
 node scripts/cathedral-diagnostic.js --json-only >/dev/null
 
@@ -31,6 +39,78 @@ if ! node scripts/covenant-ratchet.js; then
   echo "[covenant] ✗ commit BLOCKED — quality regressed."
   echo "[covenant] inspect .remembrance/diagnostics/cathedral-latest.md"
   echo "[covenant] or bypass once with COVENANT_SKIP=1 git commit ..."
+  exit 1
+fi
+echo "[covenant] enforcing exemption ratchet..."
+if ! node scripts/exemption-ratchet.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — exemption surface grew."
+  echo "[covenant] a new @oracle-* exemption needs an explicit"
+  echo "[covenant]   node scripts/exemption-ratchet.js --save-baseline"
+  echo "[covenant] which feeds each new file's stored Void reading to the field."
+  exit 1
+fi
+echo "[covenant] enforcing size ratchet..."
+if ! node scripts/size-ratchet.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — a module crossed the size cap or a monolith grew."
+  echo "[covenant] split it (house pattern: walk-files.js, mapper decomposition),"
+  echo "[covenant] or release shrunk modules: node scripts/size-ratchet.js --save-baseline"
+  exit 1
+fi
+echo "[covenant] enforcing cycle ratchet..."
+if ! node scripts/cycle-ratchet.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — the require graph tangled further."
+  echo "[covenant] untangle with a call-time lazy require or a decomposition; never widen the knot."
+  exit 1
+fi
+echo "[covenant] enforcing suite-reachability ratchet..."
+if ! node scripts/suite-reachability-ratchet.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — a test file the suite runner cannot reach."
+  echo "[covenant] move it under tests/*.test.js or adjudicate it in the baseline."
+  exit 1
+fi
+echo "[covenant] enforcing field-source ratchet..."
+if ! node scripts/field-source-ratchet.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — the coherency field's write surface changed."
+  echo "[covenant] a new MEASURED site is a decision (--save-baseline); a non-measured"
+  echo "[covenant] reading has no acceptance path — fix the site, never the gate."
+  exit 1
+fi
+echo "[covenant] enforcing ledger append-only..."
+if ! node scripts/ledger-append-ratchet.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — a governed ledger's history was edited."
+  echo "[covenant] ledgers are memory: append a correction entry, never edit the past."
+  exit 1
+fi
+echo "[covenant] enforcing silent-catch ratchet..."
+if ! node scripts/silent-catch-ratchet.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — swallowed failure grew."
+  echo "[covenant] name the failure (counter, debug line, rethrow); silence is not error handling."
+  exit 1
+fi
+echo "[covenant] enforcing console ratchet..."
+if ! node scripts/console-ratchet.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — the src/ print surface grew."
+  echo "[covenant] route it through a logger, or keep output in scripts/ and bin/."
+  exit 1
+fi
+echo "[covenant] enforcing orphan ratchet..."
+if ! node scripts/atomic-drift-ratchet.js; then
+  echo "[covenant] ✗ commit BLOCKED — an atomic declaration drifted from its own body."
+  exit 1
+fi
+
+if ! node scripts/orphan-ratchet.js; then
+  echo ""
+  echo "[covenant] ✗ commit BLOCKED — an export was born with zero consumers and no verdict."
+  echo "[covenant] wire a consumer or adjudicate it in .map-adjudications.json under exports."
   exit 1
 fi
 echo "[covenant] ✓ pass"

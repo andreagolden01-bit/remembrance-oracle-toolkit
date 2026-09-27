@@ -56,9 +56,17 @@ function detectShellInjection(code) {
     },
   ];
 
+  // Database handles also expose .exec() — a db handle running an
+  // interpolated query is a SQL-injection question for the taint-aware
+  // security checker, not a shell question for this detector. Claiming it
+  // here double-reports the AST checker's territory with none of its
+  // sanitizer awareness.
+  const DB_RECEIVER = /(?:\b(?:db|database|sqlite|conn|connection|stmt|tx)\s*\.\s*)exec(?:Sync)?\s*\(/;
+
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     if (line.trim().startsWith('//') || line.trim().startsWith('*')) continue;
+    if (DB_RECEIVER.test(line)) continue;
 
     for (const { pattern, suggestion } of patterns) {
       const match = line.match(pattern);
@@ -76,3 +84,8 @@ function detectShellInjection(code) {
 }
 
 module.exports = { detectShellInjection };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+detectShellInjection.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "even", phase: "liquid", reactivity: "medium", electronegativity: 1, group: 3, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };

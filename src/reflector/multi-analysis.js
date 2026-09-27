@@ -1,3 +1,4 @@
+// @oracle-infrastructure — internal machinery whose flagged functions are NESTED helper closures inside its exported functions (AST-parser internals, CLI, daemon, reflector analysis, lifecycle manager) — implementation internals, not module-scope periodic-table elements
 /**
  * Remembrance Reflector BOT — Multi: Multi-Repo Analysis
  *
@@ -91,6 +92,7 @@ function multiSnapshot(repoPaths, config = {}) {
     _fullSnapshots, // Internal: cached full snapshots for reuse by unifiedHeal
   };
 }
+multiSnapshot.atomicProperties = { charge: 1, valence: 1, mass: "heavy", spin: "odd", phase: "solid", reactivity: "inert", electronegativity: 1, group: 13, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Dimension Comparison ───
 
@@ -148,6 +150,7 @@ function compareDimensions(multiSnap) {
     comparisons,
   };
 }
+compareDimensions.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Pattern Drift Detection ───
 
@@ -194,6 +197,7 @@ function extractFunctionSignatures(code, language) {
 
   return fns;
 }
+extractFunctionSignatures.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 2, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Extract the body of a named function from source code.
@@ -243,6 +247,7 @@ function extractFunctionBody(code, fnName, language) {
 
   return null;
 }
+extractFunctionBody.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "minimal", alignment: "degrading", intention: "neutral", domain: "utility" };
 
 /**
  * Simple token-based similarity between two code strings.
@@ -258,6 +263,7 @@ function codeSimilarity(codeA, codeB) {
   const union = new Set([...tokensA, ...tokensB]).size;
   return union > 0 ? intersection / union : 0;
 }
+codeSimilarity.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 4, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Detect pattern drift between two repos.
@@ -387,6 +393,7 @@ function detectDrift(repoPaths, config = {}) {
     },
   };
 }
+detectDrift.atomicProperties = { charge: 1, valence: 1, mass: "heavy", spin: "odd", phase: "solid", reactivity: "low", electronegativity: 1, group: 13, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── Unified Healing ───
 
@@ -472,6 +479,7 @@ function unifiedHeal(repoPaths, config = {}) {
     },
   };
 }
+unifiedHeal.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 1, group: 1, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Full Multi-Repo Run ───
 
@@ -549,6 +557,7 @@ function multiReflect(repoPaths, config = {}) {
     collectiveWhisper: generateMultiWhisper(snapshot, comparison, drift, healing),
   };
 }
+multiReflect.atomicProperties = { charge: 1, valence: 1, mass: "medium", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 9, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Multi-Repo Whisper ───
 
@@ -589,6 +598,7 @@ function generateMultiWhisper(snapshot, comparison, drift, healing) {
 
   return parts.join(' ');
 }
+generateMultiWhisper.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Multi-Repo Report Formatting ───
 
@@ -664,6 +674,7 @@ function formatMultiReport(report) {
 
   return lines.join('\n');
 }
+formatMultiReport.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 4, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
 
 /**
  * Format multi-repo report as GitHub PR body (markdown).
@@ -734,6 +745,7 @@ function formatMultiPRBody(report) {
 
   return lines.join('\n');
 }
+formatMultiPRBody.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 4, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
 
 module.exports = {
   multiSnapshot,

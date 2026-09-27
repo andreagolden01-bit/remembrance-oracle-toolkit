@@ -1,3 +1,4 @@
+const { rmFixture, writeFixture } = require('./helpers');
 const { describe, it, before } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
@@ -6,16 +7,20 @@ const os = require('os');
 const { RemembranceOracle } = require('../src/api/oracle');
 
 /** Read all CLI source files (cli.js + command modules) as a single string for assertion checks. */
-function readCliSources() {
+const readCliSources = () => {
   const cliDir = path.join(__dirname, '..', 'src');
   const mainCli = fs.readFileSync(path.join(cliDir, 'cli.js'), 'utf-8');
   const commandsDir = path.join(cliDir, 'cli', 'commands');
   if (!fs.existsSync(commandsDir)) return mainCli;
-  const modules = fs.readdirSync(commandsDir)
+  // Recurse: command modules now include organs under subdirectories
+  // (admin/, library/, …) created by the façade+organs decompositions.
+  // A flat read missed them, so a string moved into an organ read as
+  // "absent" even though the CLI still ships it.
+  const modules = fs.readdirSync(commandsDir, { recursive: true })
     .filter(f => f.endsWith('.js'))
     .map(f => fs.readFileSync(path.join(commandsDir, f), 'utf-8'));
   return [mainCli, ...modules].join('\n');
-}
+};
 
 // ─── Feature 1: AST-Based Multi-Language Transpiler ───
 
@@ -76,7 +81,7 @@ describe('Feature 2: Community Pattern Voting', () => {
 
   before(() => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vote-test-'));
-    oracle = new RemembranceOracle({ storeDir: tmpDir });
+    oracle = new RemembranceOracle({ storeDir: tmpDir, autoSeed: false });
     // Register a pattern to vote on
     const result = oracle.registerPattern({
       name: 'vote-test-pattern',
@@ -152,7 +157,7 @@ describe('Feature 3: Visual Coherence Dashboard', () => {
 
   it('dashboard HTML includes charts panel', () => {
     const { createDashboardServer } = require('../src/dashboard/server');
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'chart-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'chart-test-')), autoSeed: false });
     const server = createDashboardServer(oracle, { auth: false });
 
     return new Promise((resolve, reject) => {
@@ -177,7 +182,7 @@ describe('Feature 3: Visual Coherence Dashboard', () => {
 
   it('dashboard has vote API endpoint', () => {
     const { createDashboardServer } = require('../src/dashboard/server');
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'vote-api-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'vote-api-test-')), autoSeed: false });
     const server = createDashboardServer(oracle, { auth: false });
 
     return new Promise((resolve, reject) => {
@@ -260,20 +265,20 @@ describe('Feature 5: Federated Search Across Repos', () => {
   });
 
   it('oracle API exposes crossRepoSearch', () => {
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'xsearch-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'xsearch-test-')), autoSeed: false });
     const result = oracle.crossRepoSearch('debounce');
     assert.ok(result);
     assert.ok(Array.isArray(result.results));
   });
 
   it('oracle API exposes discoverRepos', () => {
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'discover-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'discover-test-')), autoSeed: false });
     const repos = oracle.discoverRepos({ includeSiblings: false });
     assert.ok(Array.isArray(repos));
   });
 
   it('oracle API exposes listRepos', () => {
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'list-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'list-test-')), autoSeed: false });
     const repos = oracle.listRepos();
     assert.ok(Array.isArray(repos));
   });
@@ -438,7 +443,7 @@ describe('Feature 6: Remote Oracle Federation', () => {
   });
 
   it('oracle API exposes registerRemote', () => {
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'rem-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'rem-test-')), autoSeed: false });
     const result = oracle.registerRemote('http://127.0.0.1:19995', { name: 'api-test' });
     assert.ok(result.registered);
     // Clean up
@@ -446,20 +451,20 @@ describe('Feature 6: Remote Oracle Federation', () => {
   });
 
   it('oracle API exposes listRemotes', () => {
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'lrem-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'lrem-test-')), autoSeed: false });
     const remotes = oracle.listRemotes();
     assert.ok(Array.isArray(remotes));
   });
 
   it('oracle API exposes remoteSearch', async () => {
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'rsearch-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'rsearch-test-')), autoSeed: false });
     const result = await oracle.remoteSearch('debounce', { language: 'javascript' });
     assert.ok(result);
     assert.ok(Array.isArray(result.results));
   });
 
   it('oracle API exposes fullFederatedSearch', async () => {
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'full-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'full-test-')), autoSeed: false });
     const result = await oracle.fullFederatedSearch('sort');
     assert.ok(result);
     assert.ok(Array.isArray(result.results));
@@ -479,7 +484,7 @@ describe('Feature 6: Remote Oracle Federation', () => {
   });
 
   it('remote tools accessible via oracle API (not MCP)', () => {
-    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'rem-api-test-')) });
+    const oracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'rem-api-test-')), autoSeed: false });
     assert.equal(typeof oracle.registerRemote, 'function');
     assert.equal(typeof oracle.removeRemote, 'function');
     assert.equal(typeof oracle.listRemotes, 'function');
@@ -495,7 +500,7 @@ describe('Feature 7: Weighted Voting with Reputation', () => {
 
   before(() => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rep-test-'));
-    oracle = new RemembranceOracle({ storeDir: tmpDir });
+    oracle = new RemembranceOracle({ storeDir: tmpDir, autoSeed: false });
     const result = oracle.registerPattern({
       name: 'rep-test-pattern',
       code: 'function repTest() { return 99; }',
@@ -597,7 +602,7 @@ describe('Feature 7: Weighted Voting with Reputation', () => {
   });
 
   it('reputation accessible via oracle API (not MCP)', () => {
-    const tmpOracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'rep-api-test-')) });
+    const tmpOracle = new RemembranceOracle({ storeDir: fs.mkdtempSync(path.join(os.tmpdir(), 'rep-api-test-')), autoSeed: false });
     assert.equal(typeof tmpOracle.getVoterReputation, 'function');
     assert.equal(typeof tmpOracle.topVoters, 'function');
   });
@@ -706,7 +711,7 @@ describe('Feature 9: AI Context Injection', () => {
 
   before(() => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ctx-test-'));
-    oracle = new RemembranceOracle({ storeDir: tmpDir });
+    oracle = new RemembranceOracle({ storeDir: tmpDir, autoSeed: false });
     oracle.registerPattern({
       name: 'ctx-test-fn',
       code: 'function ctxTest() { return 1; }',
@@ -847,10 +852,10 @@ describe('Feature 10: Package Distribution', () => {
     const storeDir = path.join(tmpDir, '.remembrance');
     if (!fs.existsSync(storeDir)) fs.mkdirSync(storeDir, { recursive: true });
     const claudeMd = path.join(tmpDir, 'CLAUDE.md');
-    if (!fs.existsSync(claudeMd)) fs.writeFileSync(claudeMd, '# Oracle Instructions\n');
+    if (!fs.existsSync(claudeMd)) writeFixture(claudeMd, '# Oracle Instructions\n');
     assert.ok(fs.existsSync(storeDir));
     assert.ok(fs.existsSync(claudeMd));
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 });
 
@@ -887,29 +892,29 @@ describe('Feature 11: MCP Auto-Registration', () => {
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     assert.ok(config.mcpServers[SERVER_NAME]);
     assert.equal(config.mcpServers[SERVER_NAME].command, 'node');
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('updateConfigFile preserves existing servers', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-install-'));
     const configPath = path.join(tmpDir, 'mcp.json');
-    fs.writeFileSync(configPath, JSON.stringify({ mcpServers: { 'other-server': { command: 'python', args: ['srv.py'] } } }));
+    writeFixture(configPath, JSON.stringify({ mcpServers: { 'other-server': { command: 'python', args: ['srv.py'] } } }));
     updateConfigFile(configPath, { command: 'node', args: ['test.js'] });
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     assert.ok(config.mcpServers['other-server']);
     assert.ok(config.mcpServers[SERVER_NAME]);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('removeFromConfig removes server entry', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcp-install-'));
     const configPath = path.join(tmpDir, 'mcp.json');
-    fs.writeFileSync(configPath, JSON.stringify({ mcpServers: { [SERVER_NAME]: { command: 'node', args: [] } } }));
+    writeFixture(configPath, JSON.stringify({ mcpServers: { [SERVER_NAME]: { command: 'node', args: [] } } }));
     const result = removeFromConfig(configPath);
     assert.ok(result.success);
     const config = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     assert.ok(!config.mcpServers[SERVER_NAME]);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('removeFromConfig skips missing files', () => {
@@ -1109,7 +1114,7 @@ describe('Feature 13: GitHub OAuth Identity', () => {
     gh.removeIdentity('github:sqluser');
     assert.ok(!gh.getIdentity('github:sqluser'));
 
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('oracle API has GitHub identity methods', () => {
@@ -1119,7 +1124,7 @@ describe('Feature 13: GitHub OAuth Identity', () => {
     assert.equal(typeof oracle.startGitHubLogin, 'function');
     assert.equal(typeof oracle.isVerifiedVoter, 'function');
     assert.equal(typeof oracle.listVerifiedIdentities, 'function');
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('CLI has github command', () => {
@@ -1134,6 +1139,6 @@ describe('Feature 13: GitHub OAuth Identity', () => {
     const tmpOracle = new RemembranceOracle({ baseDir: tmpDir, threshold: 0.5, autoSeed: false });
     assert.equal(typeof tmpOracle.verifyGitHubToken, 'function');
     assert.equal(typeof tmpOracle.isVerifiedVoter, 'function');
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 });

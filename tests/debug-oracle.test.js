@@ -25,11 +25,11 @@ const {
 const { SQLiteStore, DatabaseSync } = require('../src/store/sqlite');
 const { makeTempDir } = require('./helpers');
 
-function createDebugOracle() {
+const createDebugOracle = () => {
   const baseDir = makeTempDir('debug');
   const store = new SQLiteStore(baseDir);
   return new DebugOracle(store);
-}
+};
 
 describe('Debug Oracle — Quantum Debugging Intelligence', () => {
   if (!DatabaseSync) {

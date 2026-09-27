@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Pattern Insights — Deep analytics for the pattern library.
  *
@@ -28,6 +29,7 @@ function _getDB(oracle) {
   }
   return null;
 }
+_getDB.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Track an event in the insights log.
@@ -216,7 +218,7 @@ function stalePatterns(oracle, maxDays = 90, limit = 20) {
       const created = new Date(p.timestamp || p.createdAt || 0).getTime();
       const lastUsed = p.lastUsed ? new Date(p.lastUsed).getTime() : created;
       const daysSinceUse = Math.floor((now - lastUsed) / 86400000);
-      return {
+      const __retVal = {
         id: p.id,
         name: p.name,
         language: p.language,
@@ -225,6 +227,19 @@ function stalePatterns(oracle, maxDays = 90, limit = 20) {
         usageCount: p.usageCount || 0,
         isStale: daysSinceUse >= maxDays,
       };
+      // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:insights:stalePatterns' });
+        break;
+      } catch (_) { quiet('analytics:insights:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('analytics:insights:__recordCost', _); /* best-effort */ }
+      return __retVal;
     })
     .filter(p => p.isStale)
     .sort((a, b) => b.daysSinceUse - a.daysSinceUse)
@@ -388,3 +403,16 @@ module.exports = {
   growthMetrics,
   feedbackRates,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+trackEvent.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 3, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+mostPulledPatterns.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+evolveFrequency.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+coherencyTrend.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+stalePatterns.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 1, group: 9, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+searchAnalytics.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 13, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+growthMetrics.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+feedbackRates.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+generateInsights.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

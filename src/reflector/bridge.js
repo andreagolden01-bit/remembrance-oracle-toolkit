@@ -1,4 +1,5 @@
 'use strict';
+// @oracle-infrastructure — internal machinery whose flagged functions are NESTED helper closures inside its exported functions (AST-parser internals, CLI, daemon, reflector analysis, lifecycle manager) — implementation internals, not module-scope periodic-table elements
 
 /**
  * Reflector ↔ core spine bridge.
@@ -59,12 +60,12 @@ const { getEventBus, EVENTS } = require('../core/events');
  */
 function reflectorScore(source, filePath) {
   const env = analyze(source, filePath);
-  const coherency = env.coherency || { total: 0, dimensions: {} };
-  return {
+  const coherency = env.coherency || { total: 0, dimensions: {}, breakdown: {} };
+  const __retVal = {
     filePath,
     language: env.language,
     score: coherency.total,
-    dimensions: coherency.dimensions,
+    dimensions: coherency.dimensions || coherency.breakdown || {},
     findings: {
       audit: env.audit.findings || [],
       covenant: env.covenant.violations || [],
@@ -73,7 +74,12 @@ function reflectorScore(source, filePath) {
     },
     meta: env.meta,
   };
+  // field contribution removed: contributed score, not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
+reflectorScore.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 /**
  * Produce a Reflector-style scan report (findings only, no score).
@@ -90,6 +96,7 @@ function reflectorScan(source, filePath) {
     coherency: env.coherency,
   };
 }
+reflectorScan.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Return the raw analysis envelope. Most Reflector code paths should
@@ -99,6 +106,7 @@ function reflectorScan(source, filePath) {
 function reflectorAnalyze(source, filePath, options) {
   return analyze(source, filePath, options);
 }
+reflectorAnalyze.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Run the unified heal pipeline on a Reflector target.
@@ -118,6 +126,7 @@ async function reflectorHeal(source, options = {}) {
   bus.emitSync('reflector.heal.end', { filePath: options.filePath, level: result.level, success: result.success });
   return result;
 }
+reflectorHeal.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 8, period: 2, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 /**
  * Walk a directory and produce an envelope per matching file.
@@ -132,22 +141,14 @@ function reflectorScanDirectory(rootDir, options = {}) {
   const exts = new Set(options.extensions || ['.js', '.mjs', '.cjs', '.ts', '.jsx', '.tsx']);
   const ignoreDirs = new Set(options.ignoreDirs || ['node_modules', '.git', 'dist', 'build', 'coverage', '.remembrance']);
 
-  const files = [];
-  function walk(dir) {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); }
-    catch { return; }
-    for (const entry of entries) {
-      if (ignoreDirs.has(entry.name)) continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile() && exts.has(path.extname(entry.name))) files.push(full);
-    }
-  }
-  walk(rootDir);
+  // Canonical walker (ECOSYSTEM §7). skipHidden off: the old walk only
+  // pruned by ignoreDirs, so dot-directories outside that set were scanned.
+  const { walkFiles } = require('../core/walk-files');
+  const files = walkFiles(rootDir, { skipDirs: ignoreDirs, extensions: [...exts], skipHidden: false });
 
   return analyzeFiles(files, options);
 }
+reflectorScanDirectory.atomicProperties = { charge: 0, valence: 4, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Produce a compact Reflector-style report from a set of envelopes.
@@ -178,6 +179,7 @@ function reflectorReport(envelopes) {
     },
   };
 }
+reflectorReport.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 module.exports = {
   reflectorScore,

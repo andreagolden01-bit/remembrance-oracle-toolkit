@@ -157,7 +157,9 @@ function buildSpecialistPrompt(task, dimensions, context = {}) {
  * @returns {object} { code, explanation, confidence }
  */
 function parseAgentResponse(response) {
-  if (!response) return { code: '', explanation: '', confidence: 0.5 };
+  if (!response) {
+    return { code: '', explanation: '', confidence: 0.5 };
+  }
 
   // Extract code block
   const codeMatch = response.match(/```[\w]*\n([\s\S]*?)```/);
@@ -173,7 +175,12 @@ function parseAgentResponse(response) {
   if (confMatch) explanation = explanation.replace(confMatch[0], '').trim();
   explanation = explanation.replace(/^\s*\n+|\n+\s*$/g, '').slice(0, 500);
 
-  return { code, explanation, confidence };
+  const __retVal = { code, explanation, confidence };
+  // ── LRE field-coupling (main return path; was buried in !response guard) ──
+  // field contribution removed: contributed confidence (via __retVal), not a coherency.
+  // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+  // list treated any numeric-looking return field as a coherence signal.
+  return __retVal;
 }
 
 module.exports = {
@@ -182,3 +189,10 @@ module.exports = {
   buildSpecialistPrompt,
   parseAgentResponse,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+assignDimensions.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+buildSpecialistPrompt.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+parseAgentResponse.atomicProperties = { charge: -1, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

@@ -1,8 +1,9 @@
+import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { insertLead, deleteLeadByEmail } from "@/app/lib/database";
 import type { LeadRecord } from "@/app/lib/database";
 import { notifyLeadCreated } from "@/app/lib/webhooks";
-import { sendLeadConfirmationEmail, sendAdminNotificationEmail } from "@/app/lib/email";
+import { sendLeadConfirmationEmail, sendAdminNotificationEmail, sendEmail } from "@/app/lib/email";
 import { sendLeadSms, sendAdminSms } from "@/app/lib/sms";
 import { pushLeadToCrm } from "@/app/lib/crm";
 import { checkRateLimit, getClientIp } from "@/app/lib/rate-limit";
@@ -40,7 +41,7 @@ const FALLBACK_CONFIRMATIONS = [
   "Your request has been received. A licensed professional will reach out soon.",
   "Thank you for taking the first step. Someone who understands military coverage will be in touch.",
   "Your information is secure. A licensed insurance professional will contact you shortly.",
-  "We've received your request. Expect a call or email within 1 business day.",
+  "We've received your request. Expect a call or email within 3 business days.",
   "You're one step closer to protecting your family. A professional will reach out soon.",
 ];
 
@@ -137,8 +138,9 @@ export async function POST(req: NextRequest) {
       email: validated.email,
       phone: validated.phone,
       dateOfBirth: validated.dateOfBirth,
-      consentTcpa: true,
-      consentPrivacy: true,
+      // H7 fix part 1 of 2: covenant-gate input now reflects validated input.
+      consentTcpa: validated.tcpaConsent,
+      consentPrivacy: validated.privacyConsent,
       consentText: validated.consentText,
       consentTimestamp: validated.consentTimestamp,
       utmSource: validated.utmSource,
@@ -198,8 +200,9 @@ export async function POST(req: NextRequest) {
       purchaseIntent: validated.purchaseIntent,
       veteranStatus: validated.veteranStatus,
       militaryBranch: validated.militaryBranch,
-      consentTcpa: true,
-      consentPrivacy: true,
+      // H7 fix part 2 of 2: persisted record-of-consent reflects validated input.
+      consentTcpa: validated.tcpaConsent,
+      consentPrivacy: validated.privacyConsent,
       consentTimestamp: validated.consentTimestamp,
       consentText: validated.consentText,
       consentIp: req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "unknown",
@@ -210,6 +213,8 @@ export async function POST(req: NextRequest) {
       utmCampaign: validated.utmCampaign || null,
       utmTerm: validated.utmTerm || null,
       utmContent: validated.utmContent || null,
+      latticeSrc: validated.latticeSrc || null,
+      latticeFrom: validated.latticeFrom || null,
       createdAt: new Date().toISOString(),
     };
 
@@ -387,11 +392,17 @@ export async function POST(req: NextRequest) {
         shape: covenant.coherency.shape,
       },
     });
-  } catch {
-    finish(400);
+  } catch (err) {
+    // H1 fix: previously caught silently and 400'd, losing every internal
+    // failure (covenant gate, DB, KV outage, ledger throw) without a log
+    // breadcrumb. For a lead-gen site this is money-and-trust on day one.
+    // Now: log the error and 500 so it surfaces in observability and the
+    // client knows to retry instead of treating it as a malformed request.
+    logger.error("Lead submission threw", { error: err instanceof Error ? err.message : String(err) });
+    finish(500);
     return NextResponse.json(
-      { success: false, message: "Invalid request. Please try again." },
-      { status: 400 },
+      { success: false, message: "Something went wrong. Please try again in a moment." },
+      { status: 500 },
     );
   }
 }
@@ -403,6 +414,54 @@ export async function POST(req: NextRequest) {
  * Deletes all lead records associated with that email address.
  * Rate-limited to prevent abuse.
  */
+// CCPA deletion requires proof the requester controls the email. A request
+// without a valid token emails a confirmation link to that address; only the
+// inbox owner can complete the deletion. Token = HMAC(email|expiry).
+const DELETE_SECRET = () => process.env.PROVENANCE_SECRET || process.env.NEXTAUTH_SECRET || "";
+function makeDeleteToken(email: string): string {
+  const exp = Date.now() + 24 * 60 * 60 * 1000;
+  const mac = crypto.createHmac("sha256", DELETE_SECRET()).update(`${email.toLowerCase()}|${exp}`).digest("hex");
+  return `${exp}.${mac}`;
+}
+function verifyDeleteToken(email: string, token: string | null): boolean {
+  const secret = DELETE_SECRET();
+  if (!secret || !token) return false;
+  const dot = token.indexOf(".");
+  if (dot < 0) return false;
+  const exp = Number(token.slice(0, dot));
+  const mac = token.slice(dot + 1);
+  if (!exp || Date.now() > exp || !mac) return false;
+  const expected = crypto.createHmac("sha256", secret).update(`${email.toLowerCase()}|${exp}`).digest("hex");
+  try {
+    return crypto.timingSafeEqual(Buffer.from(mac), Buffer.from(expected));
+  } catch {
+    return false;
+  }
+}
+
+// GET /api/leads?action=confirm-delete&email=&token= — the emailed link lands
+// here and completes the deletion only when the token verifies.
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+  if (url.searchParams.get("action") !== "confirm-delete") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  const email = url.searchParams.get("email") || "";
+  const token = url.searchParams.get("token");
+  const htmlHeaders = { "content-type": "text/html; charset=utf-8" };
+  if (!isValidEmail(email) || !verifyDeleteToken(email, token)) {
+    return new NextResponse("This deletion link is invalid or has expired.", { status: 400, headers: htmlHeaders });
+  }
+  const result = await deleteLeadByEmail(email);
+  if (!result.ok) {
+    return new NextResponse("Something went wrong. Please try again later.", { status: 500, headers: htmlHeaders });
+  }
+  return new NextResponse(
+    "Your data has been deleted. Any records associated with your email have been removed. You may close this page.",
+    { status: 200, headers: htmlHeaders },
+  );
+}
+
 export async function DELETE(req: NextRequest) {
   const { logger, finish } = startRequestTimer("DELETE", "/api/leads");
 
@@ -430,25 +489,33 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const result = await deleteLeadByEmail(email);
+    // Do NOT delete on an unauthenticated request. Email a confirmation link so
+    // only the inbox owner can complete it (prevents a third party purging
+    // someone else's records). Always return success — never reveal existence.
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+      || `https://${process.env.PRIMARY_DOMAIN || "localhost:3000"}`;
+    const confirmUrl =
+      `${siteUrl}/api/leads?action=confirm-delete&email=${encodeURIComponent(email)}&token=${makeDeleteToken(email)}`;
+    sendEmail({
+      to: email,
+      from: process.env.EMAIL_FROM || "noreply@valorlegacies.com",
+      subject: "Confirm your data deletion request",
+      text:
+        `We received a request to delete the data associated with this email address. ` +
+        `If this was you, confirm by opening this link (expires in 24 hours): ${confirmUrl} ` +
+        `If not, ignore this email — nothing will be deleted.`,
+      html:
+        `<p>We received a request to delete the data associated with this email address.</p>` +
+        `<p>If this was you, confirm below. If not, ignore this email — nothing will be deleted.</p>` +
+        `<p><a href="${confirmUrl}">Confirm data deletion</a></p>` +
+        `<p>This link expires in 24 hours.</p>`,
+    }).catch((err) => logger.error("CCPA confirm email failed", { error: String(err), clientIp }));
 
-    if (!result.ok) {
-      logger.error("CCPA delete failed", { error: result.error, clientIp });
-      finish(500);
-      return NextResponse.json(
-        { success: false, message: "Something went wrong processing your request." },
-        { status: 500 },
-      );
-    }
-
-    logger.info("CCPA delete completed", { deleted: result.value.deleted, clientIp });
-    finish(200, { deleted: result.value.deleted });
-
-    // Always return success even if no records found (privacy — don't reveal existence)
+    logger.info("CCPA delete confirmation sent", { clientIp });
+    finish(200);
     return NextResponse.json({
       success: true,
-      message: "Your data deletion request has been processed. Any records associated with your email have been removed.",
-      deleted: result.value.deleted,
+      message: "If records exist for this email, a confirmation link has been sent. Click it to complete deletion.",
     });
   } catch {
     finish(400);

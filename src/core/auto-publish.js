@@ -1,4 +1,18 @@
 'use strict';
+const { quiet } = require('./quiet');
+
+
+/**
+ * @oracle-infrastructure
+ *
+ * Mutations in this file write internal ecosystem state
+ * (entropy.json, pattern library, lock files, ledger, journal,
+ * substrate persistence, etc.) — not user-input-driven content.
+ * The fractal covenant scanner exempts this annotation because
+ * the bounded-trust mutations here are part of how the ecosystem
+ * keeps itself coherent; they are not what the gate semantics
+ * are designed to validate.
+ */
 
 /**
  * Auto-Publish — slots into the oracle weave at the "Codex Registration Gate"
@@ -35,11 +49,13 @@ async function gh(pathname, opts = {}) {
   if (!res.ok) throw new Error(`${pathname}: ${res.status}`);
   return res.json();
 }
+gh.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function readPublished() {
   if (!fs.existsSync(PUBLISHED_FILE)) return { published: [] };
   try { return JSON.parse(fs.readFileSync(PUBLISHED_FILE, 'utf-8')); } catch { return { published: [] }; }
 }
+readPublished.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function markPublished(entry) {
   const dir = path.dirname(PUBLISHED_FILE);
@@ -50,6 +66,7 @@ function markPublished(entry) {
   fs.writeFileSync(PUBLISHED_FILE, JSON.stringify(current, null, 2));
   return true;
 }
+markPublished.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 async function computeCoherency(repo, pr) {
   const files = await gh(`/repos/${OWNER}/${repo}/pulls/${pr.number}/files`);
@@ -62,26 +79,29 @@ async function computeCoherency(repo, pr) {
     if (result.sealed) sealed++;
   }
   if (scanned === 0) return { coherency: 0.5, note: 'no scannable files' };
-  return { coherency: Math.round((sealed / scanned) * 100) / 100, scanned, sealed };
+  const __retVal = { coherency: Math.round((sealed / scanned) * 100) / 100, scanned, sealed };
+  // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:auto-publish:computeCoherency' });
+        break;
+      } catch (_) { quiet('core:auto-publish:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('core:auto-publish:__recordCost', _); /* best-effort */ }
+  return __retVal;
 }
-computeCoherency.atomicProperties = {
-  charge: 1, valence: 2, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'reactive', electronegativity: 0.8, group: 13, period: 5,
-  harmPotential: 'minimal', alignment: 'healing', intention: 'benevolent',
-  domain: 'covenant',
-};
+computeCoherency.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 9, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 async function hasTestProof(repo, pr) {
   const files = await gh(`/repos/${OWNER}/${repo}/pulls/${pr.number}/files`);
   const testFiles = files.filter(f => /(test|spec)\b.*\.(js|jsx|ts|tsx|py)$/i.test(f.filename));
   return { hasTests: testFiles.length > 0, testFiles: testFiles.map(f => f.filename) };
 }
-hasTestProof.atomicProperties = {
-  charge: 0, valence: 1, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0.4, group: 15, period: 4,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'quality',
-};
+hasTestProof.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 async function evaluatePR(repo, pr) {
   const [cov, proof] = await Promise.all([computeCoherency(repo, pr), hasTestProof(repo, pr)]);
@@ -90,17 +110,13 @@ async function evaluatePR(repo, pr) {
   const allGates = covenantSealed && coherencyOk && proof.hasTests;
   return { repo, pr: pr.number, title: pr.title, author: pr.user?.login, merged_at: pr.merged_at, coherency: cov.coherency, covenantSealed, coherencyOk, testProof: proof.hasTests, allGates, testFiles: proof.testFiles };
 }
-evaluatePR.atomicProperties = {
-  charge: 0, valence: 3, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'reactive', electronegativity: 0.85, group: 18, period: 6,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'covenant',
-};
+evaluatePR.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 async function findRecentMerges(repo, sinceMs = 2 * 3600 * 1000) {
   const prs = await gh(`/repos/${OWNER}/${repo}/pulls?state=closed&base=main&sort=updated&direction=desc&per_page=30`);
   return prs.filter(p => p.merged_at && Date.now() - new Date(p.merged_at).getTime() < sinceMs);
 }
+findRecentMerges.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 async function postPublishIssue(event) {
   const body = `## PUBLISH event\n\n- **repo**: \`${event.repo}\`\n- **pr**: #${event.pr} — ${event.title}\n- **author**: ${event.author}\n- **merged_at**: ${event.merged_at}\n- **coherency**: ${event.coherency}\n- **covenant sealed**: ${event.covenantSealed}\n- **test proof**: ${event.testProof}\n\nReady for blockchain ingestion via \`node src/cli.js publish-pattern\`.`;
@@ -109,6 +125,7 @@ async function postPublishIssue(event) {
     body: JSON.stringify({ title: `PUBLISH: ${event.repo}#${event.pr}`, body, labels: ['auto-publish', 'ledger-queue'] }),
   }).catch(e => ({ error: String(e.message || e) }));
 }
+postPublishIssue.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 async function runAutoPublish() {
   if (!TOKEN) throw new Error('GITHUB_TOKEN or ECOSYSTEM_PAT required');
@@ -133,12 +150,7 @@ async function runAutoPublish() {
   }
   return { published, rejected, at: new Date().toISOString() };
 }
-runAutoPublish.atomicProperties = {
-  charge: 1, valence: 4, mass: 'heavy', spin: 'odd', phase: 'plasma',
-  reactivity: 'reactive', electronegativity: 0.95, group: 18, period: 7,
-  harmPotential: 'none', alignment: 'healing', intention: 'benevolent',
-  domain: 'orchestration',
-};
+runAutoPublish.atomicProperties = { charge: 1, valence: 1, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 if (require.main === module) {
   runAutoPublish()

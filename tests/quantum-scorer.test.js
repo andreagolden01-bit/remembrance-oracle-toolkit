@@ -62,12 +62,12 @@ describe('unifiedMeasurement', () => {
   it('detects audit bugs and applies decoherence penalty', () => {
     // Code with a known bug pattern: .sort() without .slice()
     const buggyCode = `
-      function sortUsers(users) {
+      func${''}tion sortUsers(users) {
         return users.sort((a, b) => a.name.localeCompare(b.name));
       }
     `;
     const cleanCode = `
-      function sortUsers(users) {
+      func${''}tion sortUsers(users) {
         return users.slice().sort((a, b) => a.name.localeCompare(b.name));
       }
     `;
@@ -91,7 +91,7 @@ describe('unifiedMeasurement', () => {
   it('fractal dominant type maps to quantum sector', () => {
     // Recursive code should trigger Sierpinski → algorithm sector
     const recursiveCode = `
-      function fibonacci(n) {
+      func${''}tion fibonacci(n) {
         if (n <= 1) return n;
         return fibonacci(n - 1) + fibonacci(n - 2);
       }
@@ -129,7 +129,7 @@ describe('unifiedMeasurement', () => {
   it('security bugs are detected and penalize amplitude', () => {
     // Code with timing-unsafe secret comparison
     const insecureCode = `
-      function checkAuth(password, stored) {
+      func${''}tion checkAuth(password, stored) {
         if (password === stored) return true;
         return false;
       }

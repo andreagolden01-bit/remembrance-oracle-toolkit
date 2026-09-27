@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * GitHub Harvester — Bulk import patterns from any Git repository.
  *
@@ -44,6 +45,7 @@ function cloneRepo(repoUrl, options = {}) {
     throw new Error(`Failed to clone ${repoUrl}: ${err.message}`);
   }
 }
+cloneRepo.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 1, group: 9, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Walk a directory and extract standalone functions from source files.
@@ -55,50 +57,46 @@ function harvestFunctions(baseDir, options = {}) {
   const results = [];
   const seen = new Set();
 
-  function walk(dir) {
-    if (!fs.existsSync(dir)) return;
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (results.length >= maxFiles) return; // Cap total files to prevent unbounded growth
-      if (SKIP_DIRS.has(entry.name) || entry.name.startsWith('.')) continue;
-      if (entry.isSymbolicLink()) continue; // Skip symlinks to prevent traversal/loops
-      const fullPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(fullPath);
-      } else if (entry.isFile()) {
-        const lang = detectLanguage(fullPath);
-        if (!lang) continue;
-        if (langFilter && lang !== langFilter) continue;
-        if (seen.has(fullPath)) continue;
-        seen.add(fullPath);
-
-        try {
-          const stat = fs.statSync(fullPath);
-          if (stat.size > maxFileSize || stat.size < 10) continue;
-
-          const code = fs.readFileSync(fullPath, 'utf-8');
-          const functions = extractFunctionNames(code, lang);
-
-          if (functions.length >= minFunctions) {
-            results.push({
-              file: path.relative(baseDir, fullPath),
-              language: lang,
-              code,
-              functions,
-              size: stat.size,
-            });
-          }
-        } catch (e) {
-          // Skip unreadable files
-          if (process.env.ORACLE_DEBUG) console.warn('skipping unreadable file:', e.message);
+  // Canonical walker (ECOSYSTEM §7), exact pre-order. The cap applies to
+  // FILTERED results — files that pass language/size/function checks — so it
+  // lives in onFile, which stops the walk the moment results is full, exactly
+  // where the old recursion returned. Symlink behaviour is unchanged: the
+  // walker only descends real directories and emits real files, so links
+  // are skipped without being followed.
+  const { walkFiles } = require('../core/walk-files');
+  if (!fs.existsSync(baseDir)) return results;
+  walkFiles(baseDir, {
+    skipDirs: SKIP_DIRS,
+    onFile: (fullPath) => {
+      const lang = detectLanguage(fullPath);
+      if (!lang) return;
+      if (langFilter && lang !== langFilter) return;
+      if (seen.has(fullPath)) return;
+      seen.add(fullPath);
+      try {
+        const stat = fs.statSync(fullPath);
+        if (stat.size > maxFileSize || stat.size < 10) return;
+        const code = fs.readFileSync(fullPath, 'utf-8');
+        const functions = extractFunctionNames(code, lang);
+        if (functions.length >= minFunctions) {
+          results.push({
+            file: path.relative(baseDir, fullPath),
+            language: lang,
+            code,
+            functions,
+            size: stat.size,
+          });
         }
+      } catch (e) {
+        // Skip unreadable files
+        if (process.env.ORACLE_DEBUG) console.warn('skipping unreadable file:', e.message);
       }
-    }
-  }
-
-  walk(baseDir);
+      if (results.length >= maxFiles) return false; // cap reached — stop the walk
+    },
+  });
   return results;
 }
+harvestFunctions.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 1, group: 6, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Split a source file into individual function patterns.
@@ -159,6 +157,7 @@ function splitFunctions(code, language) {
 
   return patterns;
 }
+splitFunctions.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "medium", electronegativity: 0, group: 2, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Extract a brace-delimited body starting from a position in code.
@@ -218,6 +217,7 @@ function extractBody(code, start) {
   }
   return null;
 }
+extractBody.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Extract a Python indented block starting from a def line.
@@ -241,6 +241,7 @@ function extractPythonBlock(code, start) {
   }
   return result.join('\n');
 }
+extractPythonBlock.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Harvest patterns from a Git repo URL or local directory.
@@ -299,7 +300,7 @@ function harvest(oracle, source, options = {}) {
     try {
       const allPatterns = oracle.patterns?.getAll?.() || [];
       for (const p of allPatterns) existingNames.add(p.name);
-    } catch (_) { /* patterns API may not exist */ }
+    } catch (_) { quiet('ci:harvest:harvestFunctions', _); /* patterns API may not exist */ }
 
     // Register test-backed patterns first (higher value)
     for (const d of discovered) {
@@ -391,6 +392,17 @@ function harvest(oracle, source, options = {}) {
     try { oracle._emit({ type: 'harvest_complete', source, registered: result.registered }); } catch (e) {
       if (process.env.ORACLE_DEBUG) console.warn('[harvest:from] best effort:', e?.message || e);
     }
+
+    // Field: the harvest pass is WORK (recordCost). The acceptance rate
+    // registered/harvested is a count ratio, not a compressor reading, so
+    // it left the coherence channel (provenance purge 2026-08-09) — every
+    // accepted pattern already carries its own compressor reading taken
+    // at the witness doorway, which is the lawful coherency of a harvest.
+    try {
+      const { recordCost } = require('../core/field-coupling');
+      recordCost({ units: Math.max(1, result.harvested), source: 'harvest:pass', kind: 'work' });
+    } catch (_) { quiet('ci:harvest:recordCost', _); /* best-effort */ }
+
     return result;
   } finally {
     if (isTemp && repoDir) {
@@ -398,6 +410,7 @@ function harvest(oracle, source, options = {}) {
     }
   }
 }
+harvest.atomicProperties = { charge: 1, valence: 1, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 1, group: 9, period: 5, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   harvest,

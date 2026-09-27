@@ -4,6 +4,7 @@
  * Agent Portal Login Page
  */
 
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
@@ -13,13 +14,23 @@ export default function ClientLoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [retryAfter, setRetryAfter] = useState(0);
 
   // Auto-redirect if already authenticated
   useEffect(() => {
     fetch("/api/portal/session").then((res) => {
-      if (res.ok) router.push("/portal/dashboard");
+      if (res.ok) router.push("/agent/dashboard");
     }).catch(() => {});
   }, [router]);
+
+  // Tick down the rate-limit countdown each second.
+  useEffect(() => {
+    if (retryAfter <= 0) return;
+    const id = setInterval(() => {
+      setRetryAfter((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [retryAfter]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,10 +44,21 @@ export default function ClientLoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
+      if (res.status === 429) {
+        // Honour Retry-After so the user sees a real countdown instead of
+        // a vague "too many attempts" message.
+        const header = res.headers.get("Retry-After");
+        const seconds = header ? Math.max(1, parseInt(header, 10) || 1) : 60;
+        setRetryAfter(seconds);
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || data.message || "Too many login attempts.");
+        return;
+      }
+
       const data = await res.json();
 
       if (data.success || res.ok) {
-        router.push("/portal/dashboard");
+        router.push("/agent/dashboard");
       } else {
         setError(data.error || data.message || "Login failed.");
       }
@@ -46,6 +68,14 @@ export default function ClientLoginPage() {
       setLoading(false);
     }
   };
+
+  const rateLimited = retryAfter > 0;
+  const submitDisabled = loading || rateLimited;
+  const submitLabel = loading
+    ? "Signing in..."
+    : rateLimited
+      ? `Try again in ${retryAfter}s`
+      : "Sign In";
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4">
@@ -72,7 +102,8 @@ export default function ClientLoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full bg-[var(--bg-surface)] text-[var(--text-primary)] placeholder-[var(--text-muted)] border border-indigo-cathedral/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-cathedral/25"
+              disabled={rateLimited}
+              className="w-full bg-[var(--bg-surface)] text-[var(--text-primary)] placeholder-[var(--text-muted)] border border-indigo-cathedral/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-cathedral/25 disabled:opacity-50"
               placeholder="you@company.com"
             />
           </div>
@@ -84,18 +115,26 @@ export default function ClientLoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="w-full bg-[var(--bg-surface)] text-[var(--text-primary)] placeholder-[var(--text-muted)] border border-indigo-cathedral/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-cathedral/25"
+              disabled={rateLimited}
+              className="w-full bg-[var(--bg-surface)] text-[var(--text-primary)] placeholder-[var(--text-muted)] border border-indigo-cathedral/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-indigo-cathedral/25 disabled:opacity-50"
             />
           </div>
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={submitDisabled}
             className="w-full px-4 py-3 rounded-lg text-sm font-medium transition-all bg-teal-cathedral text-white hover:bg-teal-cathedral/90 disabled:opacity-50"
           >
-            {loading ? "Signing in..." : "Sign In"}
+            {submitLabel}
           </button>
         </form>
+
+        <p className="mt-6 text-center text-xs text-[var(--text-muted)]">
+          New buyer?{" "}
+          <Link href="/portal/register" className="text-teal-cathedral hover:underline">
+            Create an account
+          </Link>
+        </p>
       </div>
     </main>
   );

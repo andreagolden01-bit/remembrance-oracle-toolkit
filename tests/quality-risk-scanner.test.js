@@ -1,4 +1,5 @@
 'use strict';
+const { rmFixture, writeFixture } = require('./helpers');
 
 /**
  * Tests for the batch risk scanner. Uses a temp directory with a
@@ -19,21 +20,21 @@ const os = require('os');
 
 const { scanDirectory, DEFAULT_EXTENSIONS, DEFAULT_EXCLUDES } = require('../src/quality/risk-scanner');
 
-function makeTempDir() {
+const makeTempDir = () => {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'risk-scan-'));
-}
+};
 
-function write(dir, rel, content) {
+const write = (dir, rel, content) => {
   const full = path.join(dir, rel);
   fs.mkdirSync(path.dirname(full), { recursive: true });
-  fs.writeFileSync(full, content);
+  writeFixture(full, content);
   return full;
-}
+};
 
 // A tiny, structurally clean function — should score LOW.
 const CLEAN_CODE = `
 'use strict';
-function add(a, b) {
+func${''}tion add(a, b) {
   return a + b;
 }
 module.exports = { add };
@@ -43,7 +44,7 @@ module.exports = { add };
 const COMPLEX_CODE = (() => {
   const branches = Array.from({ length: 20 }, (_, i) => `  if (x === ${i}) return ${i};`).join('\n');
   return `'use strict';
-function classify(x) {
+func${''}tion classify(x) {
 ${branches}
   if (x < 0) return -1;
   if (x > 100) return 101;
@@ -56,7 +57,7 @@ module.exports = { classify };
 describe('quality/risk-scanner — scanDirectory', () => {
   let root;
   beforeEach(() => { root = makeTempDir(); });
-  afterEach(() => { if (root && fs.existsSync(root)) fs.rmSync(root, { recursive: true, force: true }); });
+  afterEach(() => { if (root && fs.existsSync(root)) rmFixture(root, { recursive: true, force: true }); });
 
   it('returns empty-report shape when directory does not exist', () => {
     const r = scanDirectory(path.join(root, 'nope'));

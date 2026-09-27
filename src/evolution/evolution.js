@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Self-Evolution Engine — Closes the gap between detection and action.
  *
@@ -367,6 +368,28 @@ function evolve(ctx, options = {}) {
     stale: report.staleCount,
   });
 
+  // ── LRE field-coupling (auto-wired) ──
+  try {
+    let __c = 0, __n = 0;
+    for (const __h of (report.healed || [])) {
+      if (typeof __h.newCoherency === 'number') { __c += __h.newCoherency; __n++; }
+    }
+    for (const __u of (report.coherencyUpdates || [])) {
+      if (typeof __u.coherencyScore === 'number') { __c += __u.coherencyScore; __n++; }
+    }
+    if (__n > 0) {
+      const __lre_enginePaths = ['./../core/field-coupling',
+        require('path').join(__dirname, '../core/field-coupling')];
+      for (const __p of __lre_enginePaths) {
+        try {
+          const { recordCost: __recordCost } = require(__p);
+          __recordCost({ units: __n, kind: 'work', source: 'oracle:evolution:evolve' });
+          break;
+        } catch (_) { quiet('evolution:evolution:__recordCost', _); /* try next */ }
+      }
+    }
+  } catch (_) { quiet('evolution:evolution:__recordCost', _); /* best-effort */ }
+
   return report;
 }
 
@@ -385,3 +408,16 @@ module.exports = {
   // Configuration
   EVOLUTION_DEFAULTS,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+stalenessPenalty.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+evolvePenalty.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+evolutionAdjustment.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+needsAutoHeal.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+autoHeal.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+captureRejection.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+detectRegressions.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+recheckCoherency.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 1, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+evolve.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

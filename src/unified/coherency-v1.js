@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * coherency_v1 — published unified coherency formula.
@@ -25,12 +26,25 @@ function compute({ textScore = null, waveformScore = null, atomicScore = null } 
     unified = Math.pow(product, 1.0 / components.length);
   }
 
-  return {
+  const __retVal = {
     text_score:     _roundOrNull(textScore),
     waveform_score: _roundOrNull(waveformScore),
     atomic_score:   _roundOrNull(atomicScore),
     unified:        _round(unified, 12),
   };
+  // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_p1 = '../core/field-coupling';
+    const __lre_p2 = require('path').join(__dirname, '../core/field-coupling');
+    for (const __p of [__lre_p1, __lre_p2]) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:coherency-v1:compute' });
+        break;
+      } catch (_) { quiet('unified:coherency-v1:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('unified:coherency-v1:__recordCost', _); /* best-effort */ }
+  return __retVal;
 }
 
 function label(unified) {
@@ -49,14 +63,23 @@ function _clip01(x) {
   if (n > 1) return 1.0;
   return n;
 }
+_clip01.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _round(x, d) {
   const k = Math.pow(10, d);
   return Math.round(x * k) / k;
 }
+_round.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 1, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _roundOrNull(x) {
   return (x === null || x === undefined) ? null : _round(Number(x), 12);
 }
+_roundOrNull.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = { compute, label };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+compute.atomicProperties = { charge: 1, valence: 2, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 2, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+label.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * Remembrance Introspection — the system examines its own code.
@@ -139,7 +140,7 @@ function introspect(table, options = {}) {
           table, globalCoherency: 0.76, maxProposals: Math.min(5, gaps.length),
         }).catch(() => {}); // async, fire-and-forget
       }
-    } catch { /* self-improvement not available */ }
+    } catch (_e) { quiet('atomic:self-introspect:require', _e); /* self-improvement not available */ }
   }
 
   return { registered, gaps, errors };
@@ -184,13 +185,14 @@ function _loadVoidAtomicProperties(voidRoot) {
           if (Object.keys(props).length >= 5) {
             combined[fnName] = props;
           }
-        } catch { /* skip malformed */ }
+        } catch (_e) { quiet('atomic:self-introspect:parseFloat', _e); /* skip malformed */ }
       }
     }
   }
 
   return combined;
 }
+_loadVoidAtomicProperties.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 1, group: 2, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _findVoidCompressor() {
   const fs = require('fs');
@@ -204,6 +206,7 @@ function _findVoidCompressor() {
   }
   return null;
 }
+_findVoidCompressor.atomicProperties = { charge: 0, valence: 2, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 module.exports = {
   introspect,
@@ -211,9 +214,4 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-introspect.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'core',
-};
+introspect.atomicProperties = { charge: 1, valence: 4, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 1, group: 3, period: 4, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };

@@ -9,6 +9,8 @@ const CATEGORIES = [
   {
     name: 'Essential',
     commands: [
+      { name: 'onboard', description: 'Verified front door: prints protocol + conformance-checks every command/dimension/example + runs a live 116-D field read' },
+      { name: 'verify', description: 'Ecosystem truth-spine: folds encoder + field + falsification + contracts + covenant + commands into one fractal verdict (CI definition of complete)' },
       { name: 'init', description: 'Set up everything: patterns, hooks, sync, debug oracle', alias: 'setup' },
       { name: 'search', description: 'Find proven patterns by keyword or intent' },
       { name: 'resolve', description: 'Smart retrieval \u2014 PULL, EVOLVE, or GENERATE decision' },
@@ -308,3 +310,9 @@ function getAllCommandNames() {
 }
 
 module.exports = { CATEGORIES, OPTIONS, PIPE_EXAMPLES, generateHelp, getAllCommandNames };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+generateHelp.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+getAllCommandNames.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

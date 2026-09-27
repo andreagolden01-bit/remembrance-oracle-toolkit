@@ -1,4 +1,5 @@
 'use strict';
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 /**
  * Taint tracking for the security checker.
@@ -217,8 +218,9 @@ function matchesChainPrefix(chain, pattern) {
  * @param {Set<string>} tainted - pre-computed tainted vars
  * @param {(finding) => void} emit - callback to push a finding
  */
-function findSinkCalls(fn, tainted, emit) {
+function findSinkCalls(fn, tainted, emit, regexIdents) {
   const tokens = fn.bodyTokens || [];
+  const known = regexIdents instanceof Set ? regexIdents : null;
 
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i];
@@ -250,6 +252,17 @@ function findSinkCalls(fn, tainted, emit) {
       }
     }
     if (!matchedSink) { i += chain.length - 1; continue; }
+
+    // A regex receiver is never a security sink: `someRE.exec(str)` is
+    // RegExp.prototype.exec (a string match), not child_process.exec, db.exec,
+    // or a shell. This was the #1 false positive on real-world parsing code
+    // (axios: tokensRE.exec, DATA_URL_PATTERN.exec, pattern.exec).
+    // Prefer the binding this file actually declares; fall back to the name.
+    const recv = chain[chain.length - 2];
+    if (chain.length > 1 && ((known && known.has(recv)) || looksLikeRegex(recv))) {
+      i += chain.length - 1;
+      continue;
+    }
 
     // Extract call arguments
     const argsStart = chainEnd + 2; // one past the `(`
@@ -286,6 +299,39 @@ function matchesChainSuffix(chain, pattern) {
     if (pattern[pattern.length - 1 - i] !== chain[chain.length - 1 - i]) return false;
   }
   return true;
+}
+
+// Heuristic: does this receiver name denote a RegExp? `re`, `rx`, `pattern`,
+// `tokensRE`, `DATA_URL_PATTERN`, `fooRegex`. Regex method calls (.exec/.test)
+// are string matches, never security sinks. Kept deliberately narrow so it does
+// not swallow db-ish names — `store`, `capture`, `db`, `conn` do NOT match.
+function looksLikeRegex(name) {
+  if (!name) return false;
+  return /(?:[a-z]RE|_RE|REGEXP?|PATTERN|Regexp?|Pattern|Matcher)$/.test(name)
+      || /^(re|rx|regex|regexp|pattern|matcher)$/i.test(name);
+}
+
+/**
+ * Identifiers this file actually BINDS to a regex.
+ *
+ * looksLikeRegex above guesses from the name, which only catches receivers
+ * that happen to be spelled like regexes. Anything named for what it MEANS
+ * rather than what it IS — SEAL, METRIC, CAVEAT, BOUND, CORRECTION — slipped
+ * through and got reported as shell injection on a `RegExp.prototype.exec`
+ * call. Reading the binding decides it instead of inferring from spelling.
+ *
+ * Deliberately conservative: only direct `const X = /.../` and
+ * `const X = new RegExp(...)` at any scope. A regex reached through a
+ * property or returned from a call still falls back to the name heuristic.
+ */
+const REGEX_BINDING = /(?:^|[;{}\n])\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:\/(?![/*])|new\s+RegExp\b)/g;
+function collectRegexIdents(source) {
+  const set = new Set();
+  if (typeof source !== 'string') return set;
+  let m;
+  REGEX_BINDING.lastIndex = 0;
+  while ((m = REGEX_BINDING.exec(source)) !== null) set.add(m[1]);
+  return set;
 }
 
 /**
@@ -410,6 +456,7 @@ function classifyFunctionTaint(code) {
 module.exports = {
   computeTainted,
   findSinkCalls,
+  collectRegexIdents,
   readMemberChain,
   classifyFunctionTaint,
   TAINTED_CHAINS,
@@ -417,3 +464,20 @@ module.exports = {
   SINK_METHODS,
   SANITIZERS,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+computeTainted.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 4, harmPotential: "none", alignment: "degrading", intention: "neutral", domain: "utility" };
+rhsIsTainted.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+readMemberChain.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+matchesChainPrefix.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+findSinkCalls.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "high", electronegativity: 0, group: 3, period: 4, harmPotential: "dangerous", alignment: "degrading", intention: "neutral", domain: "utility" };
+matchesChainSuffix.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+looksLikeRegex.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+collectRegexIdents.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "low", electronegativity: 0, group: 2, period: 2, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractArgs.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+argIsTainted.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+tokenizeWords.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+suggestionFor.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "low", electronegativity: 0, group: 18, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "benevolent", domain: "utility" };
+classifyFunctionTaint.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "malevolent", domain: "utility" };

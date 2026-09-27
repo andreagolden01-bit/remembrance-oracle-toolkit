@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Reflector — Modes & Presets
  *
@@ -117,33 +118,44 @@ function resolveConfig(rootDir, options = {}) {
 }
 
 function shouldAutoCreatePR(report, config) {
-  if (!report) return { shouldOpenPR: false, reason: 'No report provided.', coherence: 0, threshold: 0.7 };
-  config = config || {};
-  const threshold = config.thresholds?.minCoherenceForAutoPR
-    ?? config.thresholds?.minCoherence
-    ?? 0.7;
-  const coherence = report.coherence?.after
-    ?? report.safety?.coherenceGuard?.postCoherence
-    ?? report.report?.avgImprovement
-    ?? 0;
-  const filesHealed = report.report?.filesHealed
-    ?? report.healing?.filesHealed
-    ?? report.changes?.length
-    ?? 0;
+  let __retVal;
+  if (!report) {
+    __retVal = { shouldOpenPR: false, reason: 'No report provided.', coherence: 0, threshold: 0.7 };
+  } else {
+    config = config || {};
+    const threshold = config.thresholds?.minCoherenceForAutoPR
+      ?? config.thresholds?.minCoherence
+      ?? 0.7;
+    const coherence = report.coherence?.after
+      ?? report.safety?.coherenceGuard?.postCoherence
+      ?? report.report?.avgImprovement
+      ?? 0;
+    const filesHealed = report.report?.filesHealed
+      ?? report.healing?.filesHealed
+      ?? report.changes?.length
+      ?? 0;
 
-  if (filesHealed === 0) {
-    return { shouldOpenPR: false, reason: 'No files were healed — nothing to PR.', coherence, threshold };
+    if (filesHealed === 0) {
+      __retVal = { shouldOpenPR: false, reason: 'No files were healed — nothing to PR.', coherence, threshold };
+    } else if (coherence >= threshold) {
+      __retVal = { shouldOpenPR: true, reason: `Post-heal coherence ${coherence.toFixed(3)} meets threshold ${threshold}. PR recommended.`, coherence, threshold };
+    } else {
+      __retVal = { shouldOpenPR: false, reason: `Post-heal coherence ${coherence.toFixed(3)} is below threshold ${threshold}. Manual review needed.`, coherence, threshold };
+    }
   }
-  if (coherence >= threshold) {
-    return { shouldOpenPR: true, reason: `Post-heal coherence ${coherence.toFixed(3)} meets threshold ${threshold}. PR recommended.`, coherence, threshold };
-  }
-  return { shouldOpenPR: false, reason: `Post-heal coherence ${coherence.toFixed(3)} is below threshold ${threshold}. Manual review needed.`, coherence, threshold };
-}
-
-function getModeInfo(modeName) {
-  const preset = PRESET_MODES[modeName];
-  if (!preset) return null;
-  return { name: modeName, description: getModeDescription(modeName), settings: preset };
+  // ── LRE field-coupling (hand-wired — auto-wire put this inside the !report early-return; moved to single exit) ──
+  try {
+    const __lre_p1 = '../core/field-coupling';
+    const __lre_p2 = require('path').join(__dirname, '../core/field-coupling');
+    for (const __p of [__lre_p1, __lre_p2]) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:scoring-modes:shouldAutoCreatePR' });
+        break;
+      } catch (_) { quiet('reflector:scoring-modes:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('reflector:scoring-modes:__recordCost', _); /* best-effort */ }
+  return __retVal;
 }
 
 function getModeDescription(modeName) {
@@ -207,9 +219,22 @@ module.exports = {
   applyOverrides,
   resolveConfig,
   shouldAutoCreatePR,
-  getModeInfo,
+
   listModes,
   setMode,
   getCurrentMode,
   formatResolvedConfig,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+readEnvOverrides.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+applyOverrides.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 5, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+resolveConfig.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 5, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+shouldAutoCreatePR.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 3, period: 3, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
+getModeDescription.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+listModes.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 5, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+setMode.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getCurrentMode.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+formatResolvedConfig.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };

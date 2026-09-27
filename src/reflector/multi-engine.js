@@ -1,3 +1,5 @@
+const { quiet } = require('../core/quiet');
+// @oracle-infrastructure — internal machinery whose flagged functions are NESTED helper closures inside its exported functions (AST-parser internals, CLI, daemon, reflector analysis, lifecycle manager) — implementation internals, not module-scope periodic-table elements
 /**
  * Remembrance Reflector BOT — Engine: Core Reflector
  *
@@ -42,6 +44,10 @@ function scanDirectory(rootDir, config = {}) {
   const opts = { ...DEFAULT_CONFIG, ...config };
   const files = [];
 
+  // NOT migrated to the canonical walker, deliberately: this walk uses
+  // statSync, which FOLLOWS symlinks — a linked file is analyzed here where
+  // walkFiles (dirent-based) would skip it. Same reason fractal-index keeps
+  // its own depth logic: different contract, documented rather than forced.
   function walk(dir) {
     if (files.length >= opts.maxFilesPerRun) return;
 
@@ -82,6 +88,7 @@ function scanDirectory(rootDir, config = {}) {
   walk(rootDir);
   return files;
 }
+scanDirectory.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── File Coherence Evaluation ───
 
@@ -97,7 +104,20 @@ function evaluateFile(filePath, config = {}) {
   try {
     code = readFileSync(filePath, 'utf-8');
   } catch (err) {
-    return { path: filePath, error: `Read failed: ${err.message}`, coherence: 0 };
+    const __retVal = { path: filePath, error: `Read failed: ${err.message}`, coherence: 0 };
+    // ── LRE field-coupling (auto-wired) ──
+  try {
+    const __lre_enginePaths = ['./../core/field-coupling',
+      require('path').join(__dirname, '../core/field-coupling')];
+    for (const __p of __lre_enginePaths) {
+      try {
+        const { recordCost: __recordCost } = require(__p);
+        __recordCost({ units: 1, kind: 'work', source: 'oracle:multi-engine:evaluateFile' });
+        break;
+      } catch (_) { quiet('reflector:multi-engine:__recordCost', _); /* try next */ }
+    }
+  } catch (_) { quiet('reflector:multi-engine:__recordCost', _); /* best-effort */ }
+    return __retVal;
   }
 
   if (!code.trim()) {
@@ -121,6 +141,7 @@ function evaluateFile(filePath, config = {}) {
     lines: code.split('\n').length,
   };
 }
+evaluateFile.atomicProperties = { charge: 0, valence: 2, mass: "heavy", spin: "even", phase: "gas", reactivity: "low", electronegativity: 1, group: 9, period: 3, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Codebase Snapshot ───
 
@@ -184,6 +205,7 @@ function takeSnapshot(rootDir, config = {}) {
     })),
   };
 }
+takeSnapshot.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Healing Engine ───
 
@@ -246,6 +268,7 @@ function healFile(filePath, config = {}) {
     changed,
   };
 }
+healFile.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Full Reflector Run ───
 
@@ -360,6 +383,7 @@ function reflect(rootDir, config = {}) {
     config: opts,
   };
 }
+reflect.atomicProperties = { charge: 0, valence: 1, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 13, period: 4, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Collective Whisper ───
 
@@ -406,6 +430,7 @@ function generateCollectiveWhisper(snapshot, healings) {
       : 'needs attention',
   };
 }
+generateCollectiveWhisper.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 
 // ─── Report Formatting ───
 
@@ -471,6 +496,7 @@ function formatReport(report) {
 
   return lines.join('\n');
 }
+formatReport.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 4, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
 
 /**
  * Format a reflector report as a GitHub PR body (markdown).
@@ -531,6 +557,7 @@ function formatPRBody(report) {
 
   return lines.join('\n');
 }
+formatPRBody.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 4, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
 
 module.exports = {
   DEFAULT_CONFIG,

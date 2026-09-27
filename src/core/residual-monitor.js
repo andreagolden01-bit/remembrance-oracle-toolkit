@@ -1,0 +1,228 @@
+'use strict';
+
+/**
+ * residual-monitor.js — measures what the current encoder stack
+ * fails to explain, and signals when depth should grow.
+ *
+ * Directly entangled with Void compression: every compression pass
+ * computes residual against the current depth, and when residual
+ * exceeds threshold, the stack activates its next layer (or signals
+ * that a new layer needs to be designed).
+ *
+ * Residual is measured as **false-equivalence rate**: pairs of
+ * patterns that the current stack scores as near-identical (cosine
+ * ≥ 0.99) BUT are demonstrably distinct (different namespaces,
+ * different source files). High false-equivalence = the stack
+ * cannot resolve patterns that should be resolvable. That's the
+ * residual a new layer must explain.
+ *
+ * The monitor doesn't compute all O(N²) pairs on a large substrate.
+ * It samples: for each of K probe patterns, find its top-1 cousin
+ * in the substrate and check the collision condition. Sampling
+ * gives an unbiased estimator of residual rate cheaply.
+ */
+
+const fs = require('node:fs');
+const {
+  composedAtDepth, composedCosine, currentDepth, maxAvailableDepth, activateNextLayer,
+  activeLayers,
+} = require('./decoder-stack');
+
+const DEFAULT_PROBE_COUNT = 200;
+const DEFAULT_COLLISION_THRESHOLD = 0.99;
+const DEFAULT_RESIDUAL_TRIGGER = 0.05;   // 5% false-equivalence triggers spawn
+
+// ── Helpers ─────────────────────────────────────────────────────
+
+function _namespaceOf(name) {
+  if (typeof name !== 'string') return '';
+  const slash = name.indexOf('/');
+  return slash < 0 ? name : name.slice(0, slash);
+}
+_namespaceOf.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+function _topLevelDomain(name) {
+  // Two-level prefix for finer distinct-domain check:
+  //   solana/runtime/...      → solana/runtime
+  //   language/french         → language/french
+  //   website/app/components  → website/app
+  const parts = String(name || '').split('/');
+  return parts.slice(0, Math.min(2, parts.length)).join('/');
+}
+_topLevelDomain.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+function _sampleIndices(n, k) {
+  // Deterministic-spread sample so two runs over the same substrate
+  // produce the same probe set.
+  if (n <= k) {
+    const out = []; for (let i = 0; i < n; i++) out.push(i); return out;
+  }
+  const out = [];
+  const step = n / k;
+  for (let i = 0; i < k; i++) out.push(Math.floor(i * step));
+  return out;
+}
+_sampleIndices.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+// ── Core: residual measurement ──────────────────────────────────
+
+/**
+ * Measure the false-equivalence rate of the current encoder stack
+ * against a substrate of entries holding pre-computed L1 vectors
+ * AND source-recoverable identities.
+ *
+ * Approach:
+ *   - sample K probe patterns
+ *   - for each probe, find its top-1 cousin in the substrate by
+ *     the current depth's composed cosine
+ *   - if cosine ≥ 0.99 AND the cousin is in a different top-level
+ *     domain, count as a false-equivalence
+ *
+ * ONE WIDTH, ONE SPACE (2026-09-07): the substrate holds every entry's
+ * canonical 232-D decoder vector (`composed`); the residual is measured
+ * over that vector carried into the whitened reference. It used to read
+ * the 29-D L1 alone, in the raw cone.
+ *
+ * @param {object} opts
+ *   substratePath: path to pattern_index_fractal.json
+ *   probeCount?: number = 200
+ *   collisionThreshold?: number = 0.99
+ *   sourceLookup?: (name) => string|null   resolves a name to
+ *     readable source text for re-encoding at depth > 1
+ * @returns {{
+ *   depth, probesExamined, collisions, falseEquivalences,
+ *   residualRate, examples: [...],
+ *   triggers: boolean
+ * }}
+ */
+function measureResidual(opts = {}) {
+  const path = opts.substratePath
+    || '/home/user/Void-Data-Compressor/pattern_index_fractal.json';
+  const probeCount = opts.probeCount || DEFAULT_PROBE_COUNT;
+  const collisionThreshold = opts.collisionThreshold || DEFAULT_COLLISION_THRESHOLD;
+  const trigger = opts.residualTrigger || DEFAULT_RESIDUAL_TRIGGER;
+
+  const idx = JSON.parse(fs.readFileSync(path, 'utf8'));
+  // ONE WIDTH, ONE SPACE. The residual is measured over the canonical 232-D
+  // vector carried into the whitened reference — this used to read the 29-D
+  // L1 alone, so "false equivalence at depth" was judged on the shallowest
+  // layer only, in the raw cone (trap 49).
+  const { toSpace } = require('./resonance-space');
+  const entries = Object.entries(idx.index)
+    .filter(([, entry]) => Array.isArray(entry.composed) && entry.composed.length % 29 === 0 && entry.composed.length >= 4 * 29)
+    .map(([name, entry]) => ({ name, vec: (toSpace(entry.composed) || { vec: entry.composed }).vec }));
+
+  const depth = currentDepth();
+  const probes = _sampleIndices(entries.length, probeCount).map(i => entries[i]);
+  const collisions = [];
+  const examples = [];
+
+  for (const probe of probes) {
+    let bestIdx = -1, bestCos = -1;
+    for (let j = 0; j < entries.length; j++) {
+      if (entries[j].name === probe.name) continue;
+      const c = _cosineL1(probe.vec, entries[j].vec);
+      if (c > bestCos) { bestCos = c; bestIdx = j; }
+    }
+    if (bestIdx < 0) continue;
+    const cousin = entries[bestIdx];
+    if (bestCos < collisionThreshold) continue;
+
+    // Collision at L1. Now ask: are they distinct domains?
+    const probeDom = _topLevelDomain(probe.name);
+    const cousinDom = _topLevelDomain(cousin.name);
+    if (probeDom === cousinDom) {
+      // Same domain — collision is expected (e.g., two solana/runtime
+      // files plausibly carry similar shape). Not a residual signal.
+      continue;
+    }
+
+    // Different domains AND near-identical signatures. That's residual.
+    collisions.push({ probe: probe.name, cousin: cousin.name, cosine: bestCos });
+    if (examples.length < 8) {
+      examples.push({
+        probe: probe.name,
+        cousin: cousin.name,
+        cosine: Number(bestCos.toFixed(4)),
+      });
+    }
+  }
+
+  const residualRate = collisions.length / probes.length;
+  return {
+    depth,
+    probesExamined: probes.length,
+    collisions: collisions.length,
+    falseEquivalences: collisions.length,
+    residualRate,
+    examples,
+    triggers: residualRate >= trigger,
+    triggerThreshold: trigger,
+  };
+}
+
+function _cosineL1(a, b) {
+  let dot = 0, na = 0, nb = 0;
+  const n = Math.min(a.length, b.length);
+  for (let i = 0; i < n; i++) {
+    dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i];
+  }
+  if (na < 1e-12 || nb < 1e-12) return 0;
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
+_cosineL1.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 1, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
+// ── Entanglement with compression ────────────────────────────────
+
+/**
+ * Called by the Void compression flow after a batch of new
+ * patterns is added. Measures residual; if triggered, activates the
+ * next layer. This is the entanglement: compression invokes the
+ * residual check, residual fires the encoder spawn.
+ *
+ * @param {object} opts — same as measureResidual
+ * @returns {{
+ *   measurement: object,
+ *   action: 'no-op' | 'activated-layer' | 'no-more-layers-available',
+ *   activated?: {id, dims, seed},
+ *   depthAfter: number
+ * }}
+ */
+function checkAndSpawn(opts = {}) {
+  const measurement = measureResidual(opts);
+  let action = 'no-op';
+  let activated = null;
+
+  if (measurement.triggers) {
+    const max = maxAvailableDepth();
+    const cur = currentDepth();
+    if (cur >= max) {
+      action = 'no-more-layers-available';
+    } else {
+      activated = activateNextLayer();
+      action = activated ? 'activated-layer' : 'no-op';
+    }
+  }
+
+  return {
+    measurement,
+    action,
+    activated,
+    depthAfter: currentDepth(),
+    activeStack: activeLayers(),
+  };
+}
+
+module.exports = {
+  DEFAULT_PROBE_COUNT,
+  DEFAULT_COLLISION_THRESHOLD,
+  DEFAULT_RESIDUAL_TRIGGER,
+  measureResidual,
+  checkAndSpawn,
+};
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+measureResidual.atomicProperties = { charge: 1, valence: 1, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 1, group: 13, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+checkAndSpawn.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

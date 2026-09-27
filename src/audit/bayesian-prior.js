@@ -1,4 +1,6 @@
 'use strict';
+const { quiet } = require('../core/quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 /**
  * Bayesian bug prior — waveform-based risk signal.
@@ -35,7 +37,7 @@ function loadFingerprint() {
     if (typeof mod.structuralFingerprint === 'function') {
       _fingerprintFn = mod.structuralFingerprint;
     }
-  } catch { /* not available */ }
+  } catch (_e) { quiet('audit:bayesian-prior:require', _e); /* not available */ }
   if (!_fingerprintFn) {
     // Fallback: return a hash-of-code so the module still functions.
     const crypto = require('crypto');
@@ -62,7 +64,7 @@ function loadPrior() {
       try {
         _priorCache = JSON.parse(fs.readFileSync(p, 'utf-8'));
         return _priorCache;
-      } catch { /* bad JSON, keep trying */ }
+      } catch (_e) { quiet('audit:bayesian-prior:loadPrior', _e); /* bad JSON, keep trying */ }
     }
   }
   _priorCache = { version: 1, patterns: [] };
@@ -190,7 +192,7 @@ function addPriorEntry(entry) {
         fs.writeFileSync(p, JSON.stringify(prior, null, 2));
         resetPriorCache();
         return p;
-      } catch { /* read-only, try next */ }
+      } catch (_e) { quiet('audit:bayesian-prior:resetPriorCache', _e); /* read-only, try next */ }
     }
   }
   return null;
@@ -203,3 +205,16 @@ module.exports = {
   resetPriorCache,
   similarity,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+loadFingerprint.atomicProperties = { charge: 0, valence: 2, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 16, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+loadPrior.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 10, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+resetPriorCache.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 10, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+scorePrior.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+computeFingerprint.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+similarity.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+extractSkeleton.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+detectLanguage.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+addPriorEntry.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };

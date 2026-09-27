@@ -20,7 +20,7 @@ const { makePattern, createMockOracle: _createBaseMock } = require('./helpers');
 
 // ─── Extended mock with lifecycle/search for deepen tests ───
 
-function createMockOracle(patterns = []) {
+const createMockOracle = (patterns = []) => {
   const mock = _createBaseMock(patterns);
   mock.search = (term, opts) => {
     const limit = opts?.limit || 10;
@@ -46,7 +46,7 @@ function createMockOracle(patterns = []) {
     return this._lifecycle;
   };
   return mock;
-}
+};
 
 // ═══════════════════════════════════════════════════
 // DEEPEN 1: Self-Management Test Coverage

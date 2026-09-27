@@ -54,7 +54,7 @@ describe('API Endpoints — submit, resolve, register, feedback', () => {
     server.close();
   });
 
-  function makeRequest(method, path, body) {
+  const makeRequest = (method, path, body) => {
     return new Promise((resolve, reject) => {
       const options = {
         hostname: 'localhost',
@@ -78,7 +78,7 @@ describe('API Endpoints — submit, resolve, register, feedback', () => {
       if (body) req.write(JSON.stringify(body));
       req.end();
     });
-  }
+  };
 
   it('POST /api/submit — accepts code', async () => {
     const res = await makeRequest('POST', '/api/submit', {

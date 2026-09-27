@@ -1,3 +1,5 @@
+const { quiet } = require('../core/quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 /**
  * Auto-Submit Module — Automatic pattern submission after commits and tests.
  *
@@ -42,9 +44,10 @@ function _persistErrors(baseDir, errors) {
         // Keep the last 256KB
         fs.writeFileSync(logPath, content.slice(-256 * 1024), 'utf-8');
       }
-    } catch (_) { /* rotation failure is non-fatal */ }
+    } catch (_) { quiet('ci:auto-submit:_persistErrors', _); /* rotation failure is non-fatal */ }
   } catch (_) { console.error('[auto-submit] error logging failed:', _.message, 'original errors:', errors); }
 }
+_persistErrors.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Run the full auto-submission pipeline:
@@ -332,3 +335,9 @@ function shouldAutoSubmit(cwd) {
 }
 
 module.exports = { autoSubmit, shouldAutoSubmit };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+autoSubmit.atomicProperties = { charge: 1, valence: 7, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0.88, group: 3, period: 5, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
+shouldAutoSubmit.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 3, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };

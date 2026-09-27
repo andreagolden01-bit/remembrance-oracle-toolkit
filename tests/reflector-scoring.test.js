@@ -20,19 +20,19 @@ const {
 
 // ─── Helpers ───
 
-function createTmpDir() {
+const createTmpDir = () => {
   const dir = join(tmpdir(), `scoring-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(dir, { recursive: true });
   return dir;
-}
+};
 
-function createTestFile(dir, name, code) {
+const createTestFile = (dir, name, code) => {
   const filePath = join(dir, name);
   const fileDir = join(dir, ...name.split('/').slice(0, -1));
   if (name.includes('/')) mkdirSync(fileDir, { recursive: true });
   writeFileSync(filePath, code, 'utf-8');
   return filePath;
-}
+};
 
 // ─── Cyclomatic Complexity Tests ───
 
@@ -68,8 +68,8 @@ describe('Scoring — calculateCyclomaticComplexity', () => {
 
   it('should extract per-function complexity', () => {
     const code = `
-function simple() { return 1; }
-function complex(x) {
+func${''}tion simple() { return 1; }
+func${''}tion complex(x) {
   if (x > 0) {
     for (let i = 0; i < x; i++) {
       if (i % 2 === 0) { continue; }

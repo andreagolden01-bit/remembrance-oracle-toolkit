@@ -1,0 +1,33 @@
+{
+ "before": {
+  "stage": "BEFORE feed",
+  "at": "2026-09-05T20:03:17.998Z",
+  "coherence": 0.999,
+  "coherenceIntegral": 48522.7510999913,
+  "globalEntropy": 1.001000990980971,
+  "cascadeFactor": 1,
+  "updateCount": 86879,
+  "distinctSources": 1206,
+  "fromCompressor": 254,
+  "fromElsewhere": 86545,
+  "pctFromCompressor": 0.29
+ },
+ "after": {
+  "stage": "AFTER feed",
+  "at": "2026-09-05T20:03:25.863Z",
+  "coherence": 0.10264767661876764,
+  "coherenceIntegral": 48707.825966805416,
+  "globalEntropy": 9.742060760842948,
+  "cascadeFactor": 1.1085459528439203,
+  "updateCount": 89342,
+  "distinctSources": 1207,
+  "fromCompressor": 2717,
+  "fromElsewhere": 86545,
+  "pctFromCompressor": 3.04
+ },
+ "fedCount": 2463,
+ "durationMs": 7725,
+ "readingsMedian": 0.0557,
+ "readingsMin": 0,
+ "readingsMax": 0.4464
+}

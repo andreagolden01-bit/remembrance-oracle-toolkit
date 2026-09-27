@@ -1,4 +1,5 @@
 'use strict';
+const { unlinkFixture, writeFixture } = require('./helpers');
 
 /**
  * Tests for the sliding-window Void-scan diagnostic.
@@ -49,11 +50,11 @@ after(() => new Promise((resolve) => {
   if (server) server.close(resolve); else resolve();
 }));
 
-function makeFile(name, content) {
+const makeFile = (name, content) => {
   const p = path.join(os.tmpdir(), `void-scan-${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${name}`);
-  fs.writeFileSync(p, content);
+  writeFixture(p, content);
   return p;
-}
+};
 
 describe('void-scan: sliding-window diagnostic', () => {
   it('returns error when file does not exist', async () => {
@@ -93,7 +94,7 @@ describe('void-scan: sliding-window diagnostic', () => {
       const overlapsBug = first.endLine >= 11 && first.startLine <= 20;
       assert.ok(overlapsBug, `lowest-coh window (${first.startLine}-${first.endLine}) must overlap BUG region`);
     } finally {
-      fs.unlinkSync(file);
+      unlinkFixture(file);
     }
   });
 
@@ -106,7 +107,7 @@ describe('void-scan: sliding-window diagnostic', () => {
       assert.ok(r.error);
       assert.match(r.error, /void unreachable/);
     } finally {
-      fs.unlinkSync(file);
+      unlinkFixture(file);
     }
   });
 
@@ -121,7 +122,7 @@ describe('void-scan: sliding-window diagnostic', () => {
       assert.equal(r.windowsScored, 0);
       assert.deepEqual(r.candidates, []);
     } finally {
-      fs.unlinkSync(file);
+      unlinkFixture(file);
     }
   });
 });

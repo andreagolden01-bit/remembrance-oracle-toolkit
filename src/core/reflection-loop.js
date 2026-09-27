@@ -1,3 +1,4 @@
+const { quiet } = require('./quiet');
 /**
  * Reflection Loop — the iterative refinement engine.
  * Generates candidates, scores them, selects winners, and repeats.
@@ -11,6 +12,7 @@ function _getCoherency() {
   }
   return { computeCoherencyScore: _computeCoherencyScore, detectLanguage: _detectLanguage };
 }
+_getCoherency.atomicProperties = { charge: 0, valence: 1, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 1, group: 11, period: 2, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
 const { observeCoherence } = require('./reflection-scorers');
 const { reflectionScore, MAX_LOOPS, TARGET_COHERENCE, R_EFF_BASE, R_EFF_ALPHA, EPSILON_BASE, H_RVA_WEIGHT, H_CANVAS_WEIGHT, DELTA_VOID_BASE, LAMBDA_LIGHT } = require('./reflection-serf');
 const { applySimplify, applySecure, applyReadable, applyUnify, applyCorrect, applyHeal, applyPatternGuidance } = require('./reflection-transforms');
@@ -24,11 +26,11 @@ const { applySimplify, applySecure, applyReadable, applyUnify, applyCorrect, app
 const DIMENSION_DROP_THRESHOLD = 0.05;
 
 const DIMENSION_DROP_DIAGNOSTICS = {
-  simplicity: 'Transform increased complexity — deeper nesting, longer lines, or less concise structure.',
-  readability: 'Transform reduced readability — mixed indentation, poor variable names, or lost clarity.',
-  security: 'Transform introduced security concerns — covenant violations, eval, var, or loose equality.',
-  unity: 'Transform broke style consistency — mixed camelCase/snake_case or mixed quote styles.',
-  correctness: 'Transform reduced correctness — unbalanced brackets, TODO markers, or empty catch blocks.',
+  simplicity: 'Transform increased complexity — higher cyclomatic complexity or more lines of code.',
+  readability: 'Transform reduced readability — poor naming, broken structure, or lost doc coverage.',
+  security: 'Transform introduced security concerns — covenant violations, critical severity pattern, or unsafe code.',
+  unity: 'Transform broke abundance alignment — global state mutation, magic numbers, or reduced modularity.',
+  correctness: 'Transform reduced intuitive correctness — diverged from proven patterns or introduced structural issues.',
   fractalAlignment: 'Transform reduced fractal alignment — lost self-similar structure, boundary depth, or growth cascade patterns.',
 };
 
@@ -265,6 +267,15 @@ function reflectionLoop(code, options = {}) {
   const iAmValues = history.map(h => h.coherence);
   const iAmAverage = iAmValues.reduce((s, v) => s + v, 0) / iAmValues.length;
 
+  // Field: the reflection loops are WORK. The composite is a scorer
+  // aggregate, not a compressor reading, so it left the coherence channel
+  // (provenance purge 2026-08-09) — the reflection scorers already feed
+  // their lawful void:compress_signal readings per dimension.
+  try {
+    const { recordCost } = require('./field-coupling');
+    recordCost({ units: loops, kind: 'work', source: 'reflect' });
+  } catch (_) { quiet('core:reflection-loop:recordCost', _); /* field unavailable — best-effort */ }
+
   return {
     code: current.code, coherence: current.coherence, fullCoherency: current.fullCoherency,
     dimensions: current.dimensions, loops, history,
@@ -316,33 +327,8 @@ module.exports = {
 };
 
 // ── Atomic self-description (batch-generated) ────────────────────
-reflectionLoop.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-formatReflectionResult.atomicProperties = {
-  charge: 1, valence: 0, mass: 'medium', spin: 'even', phase: 'liquid',
-  reactivity: 'inert', electronegativity: 0, group: 3, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-generateCandidates.atomicProperties = {
-  charge: 0, valence: 0, mass: 'light', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 11, period: 1,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
-generateWhisper.atomicProperties = {
-  charge: 0, valence: 0, mass: 'medium', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 2, period: 3,
-  harmPotential: 'none', alignment: 'healing', intention: 'neutral',
-  domain: 'oracle',
-};
-checkDimensionMonotonicity.atomicProperties = {
-  charge: 0, valence: 0, mass: 'heavy', spin: 'even', phase: 'gas',
-  reactivity: 'inert', electronegativity: 0, group: 1, period: 3,
-  harmPotential: 'none', alignment: 'neutral', intention: 'neutral',
-  domain: 'oracle',
-};
+reflectionLoop.atomicProperties = { charge: 1, valence: 1, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "low", electronegativity: 1, group: 4, period: 5, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+formatReflectionResult.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+generateCandidates.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+generateWhisper.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+checkDimensionMonotonicity.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

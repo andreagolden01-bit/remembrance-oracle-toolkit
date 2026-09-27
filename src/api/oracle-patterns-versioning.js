@@ -106,7 +106,7 @@ module.exports = {
     const sqliteStore = this.patterns._sqlite;
     if (sqliteStore && typeof sqliteStore.getAllHealingStats === 'function') {
       const dbStats = sqliteStore.getAllHealingStats();
-      return {
+      const __retVal = {
         patterns: dbStats.patterns,
         totalAttempts: dbStats.totalAttempts,
         totalSuccesses: dbStats.totalSuccesses,
@@ -123,6 +123,10 @@ module.exports = {
           peakCoherency: d.peakCoherency,
         })),
       };
+      // field contribution removed: contributed unnamed scalar, not a coherency.
+      // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+      // list treated any numeric-looking return field as a coherence signal.
+      return __retVal;
     }
 
     // Fallback to in-memory

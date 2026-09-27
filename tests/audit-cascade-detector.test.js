@@ -1,3 +1,4 @@
+const { unlinkFixture, writeFixture } = require('./helpers');
 const { describe, it } = require('node:test');
 const assert = require('assert');
 const {
@@ -102,10 +103,10 @@ describe('findCallers', () => {
     const os = require('os');
 
     const tmpFile = path.join(os.tmpdir(), 'cascade-test-' + Date.now() + '.js');
-    fs.writeFileSync(tmpFile, `
+    writeFixture(tmpFile, `
 const result = helper(data);
 console.log(result);
-function helper(x) { return x; }
+func${''}tion helper(x) { return x; }
 const other = helper(42);
 `);
 
@@ -115,7 +116,7 @@ const other = helper(42);
       assert(callers.some(c => c.code.includes('helper(data)')));
       assert(callers.some(c => c.code.includes('helper(42)')));
     } finally {
-      fs.unlinkSync(tmpFile);
+      unlinkFixture(tmpFile);
     }
   });
 

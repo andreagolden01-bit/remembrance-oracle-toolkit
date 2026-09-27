@@ -61,7 +61,11 @@ const BEHAVIOR_SIGNATURES = {
  */
 function checkSemanticConsistency(name, description, code) {
   if (!code || (!name && !description)) {
-    return { score: 1.0, flags: [], matchedBehavior: null, expectedBehavior: null };
+    const __retVal = { score: 1.0, flags: [], matchedBehavior: null, expectedBehavior: null };
+    // field contribution removed: contributed score (via __retVal), not a coherency.
+    // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+    // list treated any numeric-looking return field as a coherence signal.
+    return __retVal;
   }
 
   const combinedText = `${name || ''} ${description || ''}`.toLowerCase().replace(/[-_]/g, ' ');
@@ -135,3 +139,8 @@ module.exports = {
   checkSemanticConsistency,
   BEHAVIOR_SIGNATURES,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+checkSemanticConsistency.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 4, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

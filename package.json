@@ -32,15 +32,26 @@
     "./audit": "./src/audit/ast-checkers.js",
     "./lint": "./src/audit/lint-checkers.js",
     "./smell": "./src/audit/smell-checkers.js",
-    "./reflector": "./src/reflector/bridge.js"
+    "./reflector": "./src/reflector/bridge.js",
+    "./bridge": "./src/fractal-bridge.js"
   },
   "bin": {
     "remembrance-oracle": "src/cli.js",
     "oracle": "src/cli.js",
-    "reflector": "bin/reflector"
+    "remembrance": "scripts/remembrance.js",
+    "reflector": "bin/reflector",
+    "remembrance-oracle-toolkit": "src/cli.js",
+    "remembrance-field-server": "scripts/field-server.js",
+    "remembrance-field": "scripts/field-server.js",
+    "remembrance-audit": "bin/remembrance-audit"
   },
   "files": [
     "src/",
+    "scripts/field-server.js",
+    "scripts/remembrance.js",
+    "scripts/check-seams.js",
+    "scripts/propose-wire.js",
+    "seams.json",
     "types/",
     "seeds/",
     "bin/",
@@ -54,18 +65,28 @@
     "tools/*"
   ],
   "scripts": {
-    "test": "node --test --test-timeout=300000 tests/*.test.js",
+    "gaps": "node scripts/ecosystem-diagnostic.js --parent \"$(cd .. && pwd)\"",
+    "check:seams": "node scripts/check-seams.js",
+    "propose:wire": "node scripts/propose-wire.js",
+    "field": "node -e \"console.log(JSON.stringify(require('./src/core/field-coupling').peekField(),null,1))\"",
+    "sweep": "bash scripts/ecosystem-sweep.sh",
+    "unwired": "grep -rL 'field-coupling' --include='*.js' src || true",
+    "test": "ENTROPY_PATH=$(mktemp -d)/entropy.json node --test --test-timeout=300000 tests/*.test.js",
+    "test:field": "ENTROPY_PATH=$(mktemp -d)/entropy.json node --test --test-timeout=300000 --test-reporter=./scripts/field-test-reporter.js tests/*.test.js",
     "start": "node src/deploy.js",
     "setup": "node src/cli.js init",
     "init": "node src/cli.js init",
     "dashboard": "node src/cli.js dashboard",
     "cloud": "node src/cli.js cloud start",
     "mcp": "node src/cli.js mcp",
+    "field-server": "node scripts/field-server.js",
     "seed": "node src/cli.js seed",
     "analytics": "node src/cli.js analytics --json",
     "postinstall": "node -e \"try{require('fs').mkdirSync('.remembrance',{recursive:true})}catch{}\"",
     "dev:cathedral": "npm run dev --prefix digital-cathedral",
-    "build:cathedral": "npm run build --prefix digital-cathedral"
+    "build:cathedral": "npm run build --prefix digital-cathedral",
+    "atomize": "node src/atomic/batch-atomizer.js",
+    "density:refresh": "node -e \"require('./src/core/substrate-density').refreshDensity()\""
   },
   "keywords": [
     "ai",

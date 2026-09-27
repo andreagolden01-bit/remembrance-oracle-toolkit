@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Oracle Core — Resolve (Unified Quantum Measurement).
  *
@@ -55,12 +56,16 @@ module.exports = {
 
     // When oracle is toggled off, skip all pattern matching and return GENERATE
     if (!isOracleEnabled()) {
-      return {
+      const __retVal = {
         decision: 'generate', confidence: 0, reasoning: 'Oracle is disabled (config off). Write new code.',
         pattern: null, healedCode: null, healedVariantId: null, whisper: null,
         candidateNotes: null, healing: null, alternatives: [], historyMatches: [],
         quantum: null, oracleDisabled: true,
       };
+      // field contribution removed: contributed confidence, not a coherency.
+      // Auto-wired by scripts/wire-field-couplings.js, whose NUMERIC_FIELDS
+      // list treated any numeric-looking return field as a coherence signal.
+      return __retVal;
     }
 
     let decision = this.patterns.decide({ description, tags, language, minCoherency }) || { decision: 'generate', confidence: 0, alternatives: [] };
@@ -295,7 +300,7 @@ module.exports = {
     if (patternData?.id && this._quantumField && (decision.decision === 'pull' || decision.decision === 'evolve')) {
       try {
         this._quantumField.observe('patterns', [patternData.id]);
-      } catch (_) { /* non-fatal */ }
+      } catch (_) { quiet('api:oracle-core-resolve:_computeFractalAlignment', _); /* non-fatal */ }
     }
 
     // Build resolve result
@@ -343,7 +348,7 @@ module.exports = {
     resolveResult = applyPromptTag(resolveResult);
 
     // Track resolve interaction for session summary
-    try { trackResolve(resolveResult, request); } catch (_) { /* non-fatal */ }
+    try { trackResolve(resolveResult, request); } catch (_) { quiet('api:oracle-core-resolve:trackResolve', _); /* non-fatal */ }
 
     return resolveResult;
   },

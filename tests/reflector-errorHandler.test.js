@@ -15,11 +15,11 @@ const {
   buildErrorReport,
 } = require('../src/reflector/scoring');
 
-function makeTempDir() {
+const makeTempDir = () => {
   const dir = join(tmpdir(), `err-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(join(dir, '.remembrance'), { recursive: true });
   return dir;
-}
+};
 
 // ─── Error Classification ───
 

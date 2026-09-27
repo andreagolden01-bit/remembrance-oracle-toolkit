@@ -71,7 +71,26 @@ export const VALID_STATES = new Set([
   "VT","VA","WA","WV","WI","WY",
 ]);
 
-export const VALID_COVERAGE = new Set(["mortgage-protection", "final-expense", "income-replacement", "retirement-savings", "guaranteed-income", "legacy", "not-sure"]);
+export const VALID_COVERAGE = new Set([
+  // Life-chapter homepage values
+  "new-baby",
+  "bought-home",
+  "recently-married",
+  "protect-spouse-family",
+  "income-replacement",
+  "college-planning",
+  "retirement-planning",
+  "legacy",
+  "final-expense",
+  "veteran-military-family",
+  "work-benefits",
+  "not-sure",
+  // Existing campaign/landing-page values kept for backwards compatibility
+  "mortgage-protection",
+  "retirement-savings",
+  "guaranteed-income",
+  "newborn-milestones",
+]);
 export const VALID_PURCHASE_INTENT = new Set(["protect-family", "want-protection", "exploring"]);
 export const VALID_VETERAN_STATUS = new Set([
   "active-duty", "reserve", "national-guard", "veteran",
@@ -105,6 +124,10 @@ export interface ValidatedLeadPayload {
   utmCampaign?: string;
   utmTerm?: string;
   utmContent?: string;
+  /** Viral-lattice node that funneled the visitor (hostname of the .xyz they hit). */
+  latticeSrc?: string;
+  /** Original path on the lattice node before middleware collapsed to /. */
+  latticeFrom?: string;
 }
 
 export type ValidationResult =
@@ -210,6 +233,8 @@ export function validateLeadPayload(body: unknown): ValidationResult {
       ...(isString(b.utmCampaign) && b.utmCampaign ? { utmCampaign: b.utmCampaign } : {}),
       ...(isString(b.utmTerm) && b.utmTerm ? { utmTerm: b.utmTerm } : {}),
       ...(isString(b.utmContent) && b.utmContent ? { utmContent: b.utmContent } : {}),
+      ...(isString(b.latticeSrc) && b.latticeSrc ? { latticeSrc: b.latticeSrc.slice(0, 253) } : {}),
+      ...(isString(b.latticeFrom) && b.latticeFrom ? { latticeFrom: b.latticeFrom.slice(0, 512) } : {}),
     },
   };
 }

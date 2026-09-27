@@ -87,7 +87,7 @@ export const DEMO_LEADS: LeadRecord[] = [
     consentText: CONSENT_TEXT,
     consentIp: "127.0.0.1",
     consentUserAgent: "DemoSeed/1.0",
-    consentPageUrl: "/lp/veteran-life-insurance",
+    consentPageUrl: "/",
     utmSource: "direct",
     utmMedium: null,
     utmCampaign: null,
@@ -180,5 +180,8 @@ export function getDemoStats(): LeadStats {
     byState,
     byCoverage,
     byVeteranStatus,
+    // Demo data is all human-submitted, none from the viral lattice — that's
+    // accurate for seeded preview data, the real numbers come from the live DB.
+    bySource: { human: DEMO_LEADS.length, agent: 0, lattice: 0 },
   };
 }

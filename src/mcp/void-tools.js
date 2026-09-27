@@ -1,4 +1,5 @@
 'use strict';
+const { quiet } = require('../core/quiet');
 
 /**
  * MCP void_* tool family.
@@ -35,6 +36,7 @@ function _resolveVoidRepo() {
     'void_*: Void-Data-Compressor not found. Set VOID_REPO or place it as a sibling repo.'
   );
 }
+_resolveVoidRepo.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── Service-routed fast path ────────────────────────────────────
 // When compressor_service.py is running, route through HTTP instead
@@ -43,6 +45,19 @@ function _resolveVoidRepo() {
 
 const SERVICE_URL = process.env.COMPRESSOR_SERVICE_URL || 'http://127.0.0.1:8765';
 
+// Front-door token (see FRONT-DOOR WALL in compressor_service.py); '' fails open.
+let _vtTok = null;
+function _goggleToken() {
+  if (_vtTok !== null) return _vtTok;
+  try {
+    _vtTok = fs.readFileSync(
+      path.join(_resolveVoidRepo() || '', '.remembrance', 'goggles-token'),
+      'utf8').trim();
+  } catch (e) { quiet('mcp:void-tools:goggleToken', e); _vtTok = ''; }
+  return _vtTok;
+}
+_goggleToken.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 3, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+
 function _serviceCall(routePath, body, timeoutMs = 60_000) {
   return new Promise((resolve, reject) => {
     const url = new URL(SERVICE_URL + routePath);
@@ -50,7 +65,8 @@ function _serviceCall(routePath, body, timeoutMs = 60_000) {
     const req = http.request({
       hostname: url.hostname, port: url.port, path: url.pathname,
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'content-length': data.length },
+      headers: { 'content-type': 'application/json', 'content-length': data.length,
+                 'x-goggles-token': _goggleToken() },
       timeout: timeoutMs,
     }, (res) => {
       const chunks = [];
@@ -65,6 +81,7 @@ function _serviceCall(routePath, body, timeoutMs = 60_000) {
     req.write(data); req.end();
   });
 }
+_serviceCall.atomicProperties = { charge: 1, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 9, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _serviceAvailable() {
   // Cheap sync probe — open a TCP connection, immediate close
@@ -80,6 +97,7 @@ function _serviceAvailable() {
   ], { timeout: 2000 });
   return r.status === 0;
 }
+_serviceAvailable.atomicProperties = { charge: 1, valence: 1, mass: "light", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 1, group: 7, period: 2, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _serviceCallSync(routePath, body, timeoutMs = 60_000) {
   // The MCP handler API is synchronous; bridge with spawnSync inline node.
@@ -88,7 +106,7 @@ function _serviceCallSync(routePath, body, timeoutMs = 60_000) {
     `const http=require('http');
      const url=new URL('${SERVICE_URL + routePath}');
      const body=Buffer.from(${JSON.stringify(JSON.stringify(body || {}))});
-     const req=http.request({hostname:url.hostname,port:url.port,path:url.pathname,method:'POST',headers:{'content-type':'application/json','content-length':body.length},timeout:${timeoutMs}},(r)=>{
+     const req=http.request({hostname:url.hostname,port:url.port,path:url.pathname,method:'POST',headers:{'content-type':'application/json','content-length':body.length,'x-goggles-token':'${_goggleToken()}'},timeout:${timeoutMs}},(r)=>{
        const c=[]; r.on('data',d=>c.push(d));
        r.on('end',()=>{process.stdout.write(Buffer.concat(c));process.exit(0);});
      });
@@ -99,6 +117,7 @@ function _serviceCallSync(routePath, body, timeoutMs = 60_000) {
   if (r.status !== 0) throw new Error(`service call failed: ${r.stderr || r.stdout}`);
   return JSON.parse(r.stdout);
 }
+_serviceCallSync.atomicProperties = { charge: 1, valence: 1, mass: "light", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 1, group: 3, period: 3, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _runPython(scriptBody, cwd) {
   // Run a python3 -c snippet, return stdout as string. The snippet
@@ -115,11 +134,12 @@ function _runPython(scriptBody, cwd) {
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
     if (line.startsWith('{') || line.startsWith('[')) {
-      try { return JSON.parse(line); } catch { /* keep looking */ }
+      try { return JSON.parse(line); } catch (_e) { quiet('mcp:void-tools:spawnSync', _e); /* keep looking */ }
     }
   }
   throw new Error(`no JSON output from python: ${r.stdout.slice(0, 200)}`);
 }
+_runPython.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 // ─── Tool definitions ────────────────────────────────────────────
 

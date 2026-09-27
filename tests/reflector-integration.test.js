@@ -15,19 +15,19 @@ const { tmpdir } = require('os');
 
 // ─── Helpers ───
 
-function makeTempRepo(options = {}) {
+const makeTempRepo = (options = {}) => {
   const dir = join(tmpdir(), `integ-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   mkdirSync(join(dir, 'src'), { recursive: true });
   mkdirSync(join(dir, '.remembrance'), { recursive: true });
 
   // Write a JS file with intentional issues for healing to detect
   const jsCode = options.code || `
-function greet(name) {
+func${''}tion greet(name) {
   var greeting = "Hello, " + name;
   return greeting;
 }
 
-function add(a, b) {
+func${''}tion add(a, b) {
   return a + b;
 }
 
@@ -52,13 +52,13 @@ module.exports = { greet, add };
   }
 
   return dir;
-}
+};
 
-function cleanupDir(dir) {
+const cleanupDir = (dir) => {
   if (dir && existsSync(dir)) {
     rmSync(dir, { recursive: true, force: true });
   }
-}
+};
 
 // ─── 1. Config Resolution flows through orchestrator ───
 

@@ -1,3 +1,4 @@
+const { rmFixture } = require('./helpers');
 const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -32,7 +33,7 @@ describe('Healing Memory — healed_variants table', { skip: skipSQLite && 'SQLi
 
   afterEach(() => {
     store.close();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('stores a healed variant and retrieves it', () => {
@@ -130,7 +131,7 @@ describe('Healing Memory — healing_stats table', { skip: skipSQLite && 'SQLite
 
   afterEach(() => {
     store.close();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('records healing attempts', () => {
@@ -209,7 +210,7 @@ describe('Healing Memory — composite boost formula', { skip: skipSQLite && 'SQ
 
   afterEach(() => {
     store.close();
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('returns 1.0 for patterns with no healing history', () => {
@@ -280,7 +281,7 @@ if (r.a !== 2 || r.b !== 4) throw new Error('fail');`,
   });
 
   afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    rmFixture(tmpDir, { recursive: true, force: true });
   });
 
   it('includes healedVariantId in response when variant is stored', () => {

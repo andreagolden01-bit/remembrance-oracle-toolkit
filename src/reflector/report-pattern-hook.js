@@ -1,3 +1,4 @@
+const { quiet } = require('../core/quiet');
 /**
  * Remembrance Reflector BOT — Pattern Hook Sub-Module
  *
@@ -117,7 +118,20 @@ function queryPatternsForFile(code, filePath, options = {}) {
         coherencyScore: p.coherencyScore,
       }
     );
-    return { pattern: p, relevance: rel.relevance, coherency: p.coherencyScore?.total ?? 0 };
+    const __retVal = { pattern: p, relevance: rel.relevance, coherency: p.coherencyScore?.total ?? 0 };
+    // ── LRE field-coupling (auto-wired) ──
+    try {
+      const __lre_p1 = '../core/field-coupling';
+      const __lre_p2 = require('path').join(__dirname, '../core/field-coupling');
+      for (const __p of [__lre_p1, __lre_p2]) {
+        try {
+          const { recordCost: __recordCost } = require(__p);
+          __recordCost({ units: 1, kind: 'work', source: 'oracle:report-pattern-hook:queryPatternsForFile' });
+          break;
+        } catch (_) { quiet('reflector:report-pattern-hook:__recordCost', _); /* try next */ }
+      }
+    } catch (_) { quiet('reflector:report-pattern-hook:__recordCost', _); /* best-effort */ }
+    return __retVal;
   })
     .filter(s => s.relevance >= minScore)
     .sort((a, b) => b.relevance - a.relevance)
@@ -389,3 +403,17 @@ module.exports = {
   patternHookStats,
   formatPatternHook,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+extractFileHints.atomicProperties = { charge: -1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+queryPatternsForFile.atomicProperties = { charge: 0, valence: 3, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 1, group: 9, period: 4, harmPotential: "minimal", alignment: "healing", intention: "neutral", domain: "utility" };
+buildHealingContext.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 2, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+hookBeforeHeal.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 9, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+batchPatternLookup.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "solid", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getPatternHookLogPath.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+recordPatternHookUsage.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 10, period: 3, harmPotential: "none", alignment: "healing", intention: "neutral", domain: "utility" };
+getTopPatterns.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 5, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+patternHookStats.atomicProperties = { charge: -1, valence: 0, mass: "medium", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 13, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+formatPatternHook.atomicProperties = { charge: 1, valence: 0, mass: "medium", spin: "even", phase: "liquid", reactivity: "inert", electronegativity: 0, group: 3, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };

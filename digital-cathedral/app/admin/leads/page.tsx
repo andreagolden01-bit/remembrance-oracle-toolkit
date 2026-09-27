@@ -1,278 +1,220 @@
 "use client";
 
 /**
- * Admin Lead Management Page
+ * /admin/leads — the all-leads list.
  *
- * Features:
- *  - Seed test leads (all 4 tiers) for demo/testing
- *  - Seed test client for portal access
- *  - View seeded lead results with tier badges
- *  - Quick link back to dashboard
+ * A focused, always-accessible view of every submitted lead: search by
+ * name/email/phone/id, filter by submission source, paginate, and export to
+ * CSV. Reads the same /api/admin/leads endpoint the dashboard uses (only
+ * admitted leads are stored; bot/fraud submissions are rejected at the gate and
+ * never persist). Rendered inside the shared PortalShell so it matches the rest
+ * of the admin portal.
  */
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Panel, PortalShell } from "../../components/portal-shell";
 
-const TIER_STYLES: Record<string, string> = {
-  hot: "bg-red-50 text-red-700 border-red-200",
-  warm: "bg-amber-50 text-amber-700 border-amber-200",
-  standard: "bg-emerald-50 text-emerald-700 border-emerald-200",
-  cool: "bg-sky-50 text-sky-700 border-sky-200",
-};
-
-interface SeedResult {
-  name: string;
-  status: string;
-  leadId?: string;
-  tier?: string;
-  score?: number;
+interface LeadRow {
+  leadId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  state: string;
+  coverageInterest: string;
+  veteranStatus: string;
+  createdAt: string;
+  score: number;
+  tier: string;
+  coherency?: number;
+  coherencyTier?: string;
+  archetype?: string;
 }
 
-interface SeedClientResult {
-  message: string;
-  credentials?: { email: string; password: string };
-  clientId?: string;
-  details?: {
-    companyName: string;
-    balance: string;
-    pricePerLead: string;
-    exclusivePrice: string;
-    licensedStates: number;
-  };
-}
+const LIMIT = 50;
+const SOURCES = [
+  { value: "", label: "All sources" },
+  { value: "human", label: "Human" },
+  { value: "agent", label: "Agent" },
+  { value: "lattice", label: "Lattice" },
+] as const;
 
-export default function AdminLeadManagement() {
-  const router = useRouter();
-  const [seedLoading, setSeedLoading] = useState(false);
-  const [seedResults, setSeedResults] = useState<SeedResult[] | null>(null);
-  const [seedMessage, setSeedMessage] = useState("");
-  const [seedDemoMode, setSeedDemoMode] = useState(false);
-  const [seedError, setSeedError] = useState("");
+const th = "px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-[#776e61]";
+const td = "border-t border-[#eee7da] px-3 py-3 text-sm align-middle";
 
-  const [clientLoading, setClientLoading] = useState(false);
-  const [clientResult, setClientResult] = useState<SeedClientResult | null>(null);
-  const [clientError, setClientError] = useState("");
+export default function AdminLeadsPage() {
+  const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
+  const [search, setSearch] = useState("");
+  const [source, setSource] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleSeedLeads = async () => {
-    setSeedLoading(true);
-    setSeedError("");
-    setSeedResults(null);
-    setSeedMessage("");
-    setSeedDemoMode(false);
+  // Debounce the search box so we don't fire a request per keystroke.
+  const debounced = useDebouncedValue(search, 350);
+
+  const fetchLeads = useCallback(async () => {
+    setLoading(true);
+    setErrorMsg(null);
+    const params = new URLSearchParams();
+    if (debounced) params.set("search", debounced);
+    if (source) params.set("source", source);
+    params.set("limit", String(LIMIT));
+    params.set("offset", String(page * LIMIT));
     try {
-      const res = await fetch("/api/admin/seed-lead", { method: "POST", headers: { "Content-Type": "application/json" } });
-      const data = await res.json();
-      if (data.success) {
-        setSeedResults(data.leads);
-        setSeedMessage(data.message || "");
-        setSeedDemoMode(!!data.demoMode);
-      } else {
-        setSeedError(data.message || "Failed to seed leads.");
+      const res = await fetch(`/api/admin/leads?${params}`, { cache: "no-store" });
+      if (res.status === 401) {
+        window.location.href = "/admin/login";
+        return;
       }
-    } catch {
-      setSeedError("Network error — is the server running?");
+      if (!res.ok) {
+        setErrorMsg("server returned " + res.status);
+        return;
+      }
+      const data = await res.json();
+      setLeads(data.leads ?? []);
+      setTotal(data.total ?? 0);
+    } catch (err) {
+      setErrorMsg("network error: " + (err instanceof Error ? err.message : "unknown"));
+    } finally {
+      setLoading(false);
     }
-    setSeedLoading(false);
-  };
+  }, [debounced, source, page]);
 
-  const handleSeedClient = async () => {
-    setClientLoading(true);
-    setClientError("");
-    setClientResult(null);
-    try {
-      const res = await fetch("/api/admin/seed-client", { method: "POST", headers: { "Content-Type": "application/json" } });
-      const data = await res.json();
-      if (data.success) {
-        setClientResult(data);
-      } else {
-        setClientError(data.message || "Failed to seed client.");
-      }
-    } catch {
-      setClientError("Network error — is the server running?");
-    }
-    setClientLoading(false);
-  };
+  useEffect(() => {
+    fetchLeads();
+  }, [fetchLeads]);
+
+  // Reset to the first page whenever the filters change.
+  useEffect(() => {
+    setPage(0);
+  }, [debounced, source]);
+
+  const exportHref = source
+    ? `/api/admin/export?source=${encodeURIComponent(source)}`
+    : "/api/admin/export";
+
+  const from = total === 0 ? 0 : page * LIMIT + 1;
+  const to = Math.min((page + 1) * LIMIT, total);
 
   return (
-    <main className="min-h-screen px-4 py-8 max-w-5xl mx-auto">
-      {/* Header */}
-      <header className="flex items-center justify-between mb-8">
-        <div>
-          <div className="text-teal-cathedral text-xs tracking-[0.3em] uppercase pulse-gentle">
-            Admin
-          </div>
-          <h1 className="text-3xl font-light text-[var(--text-primary)]">
-            Lead Management
-          </h1>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={() => router.push("/admin")}
-            className="px-4 py-2 rounded-lg text-sm transition-all bg-teal-cathedral text-white hover:bg-teal-cathedral/90"
+    <PortalShell
+      role="admin"
+      eyebrow="Lead center"
+      title="All Leads"
+      description="Every submitted lead — search, filter by source, and export. Only admitted leads are stored; bot and fraud submissions are rejected at the gate."
+    >
+      <Panel
+        title={total > 0 ? `All leads · ${total.toLocaleString()}` : "All leads"}
+        action={<a href={exportHref} className="text-xs font-bold text-[#176b65]">Export CSV →</a>}
+      >
+        <div className="mb-4 flex flex-wrap gap-2">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, email, phone, or lead ID…"
+            className="min-w-[220px] flex-1 rounded-lg border border-[#e2d9c9] bg-white px-3 py-2 text-sm text-[#211d18] placeholder:text-[#8a8175] outline-none focus:border-[#c9a75f]"
+          />
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="rounded-lg border border-[#e2d9c9] bg-white px-3 py-2 text-sm text-[#211d18] outline-none focus:border-[#c9a75f]"
           >
-            Back to Dashboard
-          </button>
-          <button
-            onClick={() => router.push("/admin/clients")}
-            className="px-4 py-2 rounded-lg text-sm transition-all text-[var(--text-muted)] border border-indigo-cathedral/10 hover:border-indigo-cathedral/25"
-          >
-            Client Management
-          </button>
-        </div>
-      </header>
-
-      {/* Seed Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        {/* Seed Test Leads Card */}
-        <div className="cathedral-surface p-6">
-          <h2 className="text-lg font-light text-[var(--text-primary)] mb-2">
-            Seed Test Leads
-          </h2>
-          <p className="text-sm text-[var(--text-muted)] mb-4">
-            Insert 5 realistic test leads spanning all score tiers — hot, warm, standard, and cool.
-            Leads appear instantly in the dashboard and agent portal.
-          </p>
-          <button
-            onClick={handleSeedLeads}
-            disabled={seedLoading}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium transition-all bg-teal-cathedral text-white hover:bg-teal-cathedral/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {seedLoading ? "Seeding..." : "Seed Test Leads"}
-          </button>
-          {seedError && (
-            <p className="mt-3 text-sm text-red-600">{seedError}</p>
-          )}
-        </div>
-
-        {/* Seed Test Client Card */}
-        <div className="cathedral-surface p-6">
-          <h2 className="text-lg font-light text-[var(--text-primary)] mb-2">
-            Seed Test Client
-          </h2>
-          <p className="text-sm text-[var(--text-muted)] mb-4">
-            Create a test buyer client account for the agent portal.
-            Includes $500 balance and licenses for 10 states.
-          </p>
-          <button
-            onClick={handleSeedClient}
-            disabled={clientLoading}
-            className="px-5 py-2.5 rounded-lg text-sm font-medium transition-all bg-teal-cathedral text-white hover:bg-teal-cathedral/90 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {clientLoading ? "Seeding..." : "Seed Test Client"}
-          </button>
-          {clientError && (
-            <p className="mt-3 text-sm text-red-600">{clientError}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Seed Lead Results */}
-      {seedResults && (
-        <div className="cathedral-surface p-6 mb-6">
-          {seedDemoMode && (
-            <div className="mb-4 px-4 py-3 rounded-lg text-sm bg-amber-50 text-amber-800 border border-amber-200">
-              Demo mode — no database connected. Leads are served from built-in demo data.
-            </div>
-          )}
-          {seedMessage && (
-            <p className="text-sm text-emerald-600 mb-4">{seedMessage}</p>
-          )}
-          <h3 className="text-sm font-medium text-[var(--text-primary)] uppercase tracking-wider mb-4">
-            Test Leads
-          </h3>
-          <div className="space-y-3">
-            {seedResults.map((r, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between py-2 px-3 rounded-lg bg-[var(--bg-surface)]"
-              >
-                <div className="flex items-center gap-3">
-                  {r.tier && (
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-medium border ${TIER_STYLES[r.tier] || ""}`}>
-                      {r.score != null && <span>{r.score}</span>}
-                      <span className="opacity-70">{r.tier}</span>
-                    </span>
-                  )}
-                  <span className="text-sm text-[var(--text-primary)]">{r.name}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  {r.leadId && (
-                    <span className="text-xs text-[var(--text-muted)] font-mono">{r.leadId}</span>
-                  )}
-                  <span className={`text-xs font-medium ${r.status === "created" ? "text-emerald-600" : r.status === "already exists" ? "text-amber-600" : "text-red-600"}`}>
-                    {r.status}
-                  </span>
-                </div>
-              </div>
+            {SOURCES.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
             ))}
-          </div>
-          <p className="mt-4 text-xs text-[var(--text-muted)]">
-            View these leads on the{" "}
-            <button onClick={() => router.push("/admin")} className="text-teal-cathedral underline">
-              Dashboard
-            </button>
-            {" "}or test the{" "}
-            <button onClick={() => window.open("/portal", "_blank")} className="text-teal-cathedral underline">
-              Agent Portal
-            </button>.
-          </p>
+          </select>
         </div>
-      )}
 
-      {/* Seed Client Results */}
-      {clientResult && (
-        <div className="cathedral-surface p-6 mb-6">
-          <h3 className="text-sm font-medium text-[var(--text-primary)] uppercase tracking-wider mb-4">
-            Test Client Account
-          </h3>
-          <p className="text-sm text-emerald-600 mb-3">{clientResult.message}</p>
-          {clientResult.credentials && (
-            <div className="bg-[var(--bg-surface)] rounded-lg p-4 space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--text-muted)]">Email</span>
-                <span className="text-[var(--text-primary)] font-mono">{clientResult.credentials.email}</span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-[var(--text-muted)]">Password</span>
-                <span className="text-[var(--text-primary)] font-mono">{clientResult.credentials.password}</span>
-              </div>
-              {clientResult.details && (
-                <>
-                  <div className="border-t border-indigo-cathedral/10 my-2" />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[var(--text-muted)]">Company</span>
-                    <span className="text-[var(--text-primary)]">{clientResult.details.companyName}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[var(--text-muted)]">Balance</span>
-                    <span className="text-emerald-600">{clientResult.details.balance}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[var(--text-muted)]">(Lead === 0 ? 0 : Price / Lead)</span>
-                    <span className="text-[var(--text-primary)]">{clientResult.details.pricePerLead}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[var(--text-muted)]">Exclusive Price</span>
-                    <span className="text-[var(--text-primary)]">{clientResult.details.exclusivePrice}</span>
-                  </div>
-                </>
+        {errorMsg && (
+          <p className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{errorMsg}</p>
+        )}
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px]">
+            <thead>
+              <tr>
+                {["Name", "State", "Coverage", "Veteran", "Tier", "Archetype", "Submitted", "Consent", "Action"].map((h) => (
+                  <th key={h} className={th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading && leads.length === 0 ? (
+                <tr><td colSpan={9} className={`${td} text-center text-[#8a8175]`}>Loading…</td></tr>
+              ) : leads.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-3 py-12 text-center">
+                    <b className="block text-[#211d18]">No leads have been submitted yet.</b>
+                    <span className="mt-1 block text-sm text-[#8a8175]">Once customers complete the Protection Path form, they’ll appear here for review.</span>
+                  </td>
+                </tr>
+              ) : (
+                leads.map((l) => (
+                  <tr key={l.leadId} className="hover:bg-[#faf7f0]">
+                    <td className={`${td} whitespace-nowrap font-semibold text-[#211d18]`}>{l.firstName} {l.lastName}</td>
+                    <td className={td}>{l.state}</td>
+                    <td className={`${td} text-[#776e61]`}>{l.coverageInterest}</td>
+                    <td className={`${td} text-[#776e61]`}>{l.veteranStatus}</td>
+                    <td className={`${td} whitespace-nowrap`}>
+                      <span className="font-semibold text-[#176b65]">{l.tier}</span>
+                      {typeof l.score === "number" && <span className="text-[#8a8175]"> · {l.score}</span>}
+                    </td>
+                    <td className={`${td} text-[#776e61]`}>{l.archetype ?? "—"}</td>
+                    <td className={`${td} whitespace-nowrap text-[#776e61]`}>
+                      {l.createdAt ? new Date(l.createdAt).toLocaleDateString() : "—"}
+                    </td>
+                    <td className={`${td} text-emerald-600`}>Recorded</td>
+                    <td className={td}>
+                      <a href={`/admin/leads/${l.leadId}`} className="rounded-lg border border-[#e2d9c9] px-3 py-1.5 text-sm text-[#176b65] hover:border-[#c9a75f]">View</a>
+                    </td>
+                  </tr>
+                ))
               )}
-            </div>
-          )}
-          <p className="mt-4 text-xs text-[var(--text-muted)]">
-            Log in at the{" "}
-            <button onClick={() => window.open("/portal", "_blank")} className="text-teal-cathedral underline">
-              Agent Portal
-            </button>
-            {" "}with these credentials to browse and purchase leads.
-          </p>
+            </tbody>
+          </table>
         </div>
-      )}
 
-      {/* Footer */}
-      <footer className="mt-12 text-center text-xs text-[var(--text-muted)]">
-        <p>Lead Management — Test data for demo and development purposes.</p>
-      </footer>
-    </main>
+        {total > LIMIT && (
+          <nav className="mt-5 flex items-center justify-between text-sm" aria-label="Leads pagination">
+            <span className="text-[#8a8175]">Showing {from}–{to} of {total.toLocaleString()}</span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="rounded-lg border border-[#e2d9c9] px-3 py-1.5 text-[#211d18] hover:border-[#c9a75f] disabled:opacity-40"
+              >
+                ← Prev
+              </button>
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                disabled={to >= total}
+                className="rounded-lg border border-[#e2d9c9] px-3 py-1.5 text-[#211d18] hover:border-[#c9a75f] disabled:opacity-40"
+              >
+                Next →
+              </button>
+            </div>
+          </nav>
+        )}
+      </Panel>
+    </PortalShell>
   );
+}
+
+/** Local debounce so a value only updates after it stops changing for `ms`. */
+function useDebouncedValue<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setDebounced(value), ms);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [value, ms]);
+  return debounced;
 }

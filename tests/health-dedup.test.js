@@ -1,3 +1,4 @@
+const { rmFixture } = require('./helpers');
 /**
  * Tests for oracle health check, candidate dedup, orphan cleanup,
  * entry pruning, audit rotation, vacuum, and candidate cap.
@@ -11,15 +12,15 @@ const os = require('os');
 
 let SQLiteStore;
 
-function createTempStore() {
+const createTempStore = () => {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'oracle-health-'));
   const store = new SQLiteStore(tmpDir);
   return { store, tmpDir };
-}
+};
 
-function cleanup(tmpDir) {
-  try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch (e) {}
-}
+const cleanup = (tmpDir) => {
+  try { rmFixture(tmpDir, { recursive: true, force: true }); } catch (e) {}
+};
 
 describe('Health & Dedup', () => {
   before(() => {

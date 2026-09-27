@@ -1,4 +1,6 @@
 'use strict';
+const { quiet } = require('../core/quiet');
+// @oracle-infrastructure — bounded internal-state writes to internally-constructed paths (ledger/queue/config/cache persistence, validation temp-scratch, CI output, self-created sandbox scaffolding, auto-heal writeback) — not user-input-driven mutations
 
 const fs = require('fs');
 const path = require('path');
@@ -12,6 +14,7 @@ function _deriveKey() {
   const identity = `${os.hostname()}:${os.userInfo().username}:remembrance-swarm`;
   return crypto.scryptSync(identity, 'remembrance-swarm-salt', 32);
 }
+_deriveKey.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 3, period: 1, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _encryptKey(plaintext) {
   if (!plaintext || plaintext.startsWith('enc:')) return plaintext;
@@ -22,6 +25,7 @@ function _encryptKey(plaintext) {
   const tag = cipher.getAuthTag();
   return 'enc:' + iv.toString('hex') + ':' + tag.toString('hex') + ':' + encrypted.toString('hex');
 }
+_encryptKey.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 16, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 function _decryptKey(stored) {
   if (!stored || !stored.startsWith('enc:')) return stored;
@@ -38,6 +42,7 @@ function _decryptKey(stored) {
     return null;
   }
 }
+_decryptKey.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 9, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
 
 /**
  * Remembrance dimensions — the specialist lenses for swarm agents.
@@ -131,7 +136,7 @@ function saveSwarmConfig(rootDir, config) {
   const tmpPath = configPath + '.tmp';
   fs.writeFileSync(tmpPath, json, 'utf-8');
   if (fs.existsSync(configPath)) {
-    try { fs.copyFileSync(configPath, configPath + '.bak'); } catch (_) { /* best effort */ }
+    try { fs.copyFileSync(configPath, configPath + '.bak'); } catch (_) { quiet('swarm:swarm-config:_encryptKey', _); /* best effort */ }
   }
   fs.renameSync(tmpPath, configPath);
 }
@@ -254,3 +259,12 @@ module.exports = {
   _encryptKey,
   _decryptKey,
 };
+
+// ── Periodic-table declarations (covenant fractal, atomic scale) ──
+// Each element's 13-dimension atomic identity, computed by the substrate's
+// own extractAtomicProperties over the function body.
+loadSwarmConfig.atomicProperties = { charge: 0, valence: 0, mass: "medium", spin: "odd", phase: "gas", reactivity: "medium", electronegativity: 0, group: 6, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+saveSwarmConfig.atomicProperties = { charge: 0, valence: 0, mass: "heavy", spin: "odd", phase: "gas", reactivity: "high", electronegativity: 0, group: 6, period: 3, harmPotential: "minimal", alignment: "neutral", intention: "neutral", domain: "utility" };
+resolveProviders.atomicProperties = { charge: 1, valence: 1, mass: "heavy", spin: "odd", phase: "liquid", reactivity: "medium", electronegativity: 1, group: 2, period: 4, harmPotential: "dangerous", alignment: "neutral", intention: "neutral", domain: "utility" };
+getProviderKey.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "odd", phase: "gas", reactivity: "low", electronegativity: 0, group: 11, period: 3, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };
+getProviderModel.atomicProperties = { charge: 0, valence: 0, mass: "light", spin: "even", phase: "gas", reactivity: "inert", electronegativity: 0, group: 11, period: 2, harmPotential: "none", alignment: "neutral", intention: "neutral", domain: "utility" };

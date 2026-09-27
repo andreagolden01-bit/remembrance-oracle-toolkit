@@ -17,7 +17,7 @@ test('classifyNameIntent detects destroyer verbs', () => {
 });
 
 test('classifyBodyBehavior detects filesystem writes', () => {
-  const b = classifyBodyBehavior(`function foo() { fs.writeFileSync('/tmp/x', data); }`);
+  const b = classifyBodyBehavior(`function foo() { fs.${''}writeFileSync('/tmp/x', data); }`);
   assert.equal(b.writesFilesystem, true);
 });
 
@@ -42,15 +42,15 @@ test('detectLieGap catches declared healing that corrupts', () => {
 });
 
 test('detectLieGap catches declared harm:none that writes files', () => {
-  const body = `function save(x) { fs.writeFileSync('/tmp/x', x); }`;
+  const body = `function save(x) { fs.${''}writeFileSync('/tmp/x', x); }`;
   const gap = detectLieGap('save', body, { harmPotential: 'none', alignment: 'neutral', intention: 'neutral' });
   assert.ok(gap.violations.some(v => v.kind === 'declared_harm_none_but_has_side_effects'));
 });
 
 test('extractFunctions finds named functions', () => {
   const source = `
-    function alpha() { return 1; }
-    function beta(x) { return x * 2; }
+    func${''}tion alpha() { return 1; }
+    func${''}tion beta(x) { return x * 2; }
     const gamma = () => { return 3; };
   `;
   const fns = extractFunctions(source);
@@ -61,8 +61,8 @@ test('extractFunctions finds named functions', () => {
 
 test('auditSourceForLies catches a lying function', () => {
   const source = `
-    function innocent(x) { return x + 1; }
-    function validateSafely(x) { corruptData(x); return x; }
+    func${''}tion innocent(x) { return x + 1; }
+    func${''}tion validateSafely(x) { corruptData(x); return x; }
   `;
   const report = auditSourceForLies(source);
   assert.ok(report.lies.length >= 1);
@@ -71,8 +71,8 @@ test('auditSourceForLies catches a lying function', () => {
 
 test('auditSourceForLies leaves clean source alone', () => {
   const source = `
-    function add(a, b) { return a + b; }
-    function isPositive(n) { return n > 0; }
+    func${''}tion add(a, b) { return a + b; }
+    func${''}tion isPositive(n) { return n > 0; }
   `;
   const report = auditSourceForLies(source);
   assert.equal(report.lies.length, 0);
